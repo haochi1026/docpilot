@@ -1,0 +1,21 @@
+services:
+  namesrv:
+    image: apache/rocketmq:4.9.7
+    command: sh mqnamesrv
+    ports:
+      - "19876:9876"
+  broker:
+    image: apache/rocketmq:4.9.7
+    command: sh mqbroker -n namesrv:9876 -c /home/rocketmq/rocketmq-4.9.7/conf/broker.conf
+    environment:
+      NAMESRV_ADDR: namesrv:9876
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/rocketmq-4.9.7/conf/broker.conf
+    depends_on:
+      - namesrv
+  server:
+    environment:
+      QUEUE_MODE: rocketmq
+      ROCKETMQ_NAMESERVER: namesrv:9876
+    depends_on:
+      - broker

@@ -1,0 +1,75 @@
+### 登录
+POST http://localhost:18081/api/auth/login
+Content-Type: application/json
+
+{"username":"student","password":"123456"}
+
+> {% client.global.set("token", response.body.token); %}
+
+### 知识库列表
+GET http://localhost:18081/api/kbs
+Authorization: Bearer {{token}}
+
+### 文档列表
+GET http://localhost:18081/api/documents?kbId=1
+Authorization: Bearer {{token}}
+
+### 知识库概览
+GET http://localhost:18081/api/workspace/overview?kbId=1
+Authorization: Bearer {{token}}
+
+### 当前模型与检索能力
+GET http://localhost:18081/api/system/capabilities
+Authorization: Bearer {{token}}
+
+### 知识库成员列表
+GET http://localhost:18081/api/kbs/1/members
+Authorization: Bearer {{token}}
+
+### 授予或调整成员权限（部门主管/管理员）
+POST http://localhost:18081/api/kbs/1/members
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"username":"student","permission":"READ"}
+
+### 文档解析详情与切片预览
+GET http://localhost:18081/api/documents/1
+Authorization: Bearer {{token}}
+
+### 失败文档重新解析
+POST http://localhost:18081/api/documents/1/retry
+Authorization: Bearer {{token}}
+
+### 重建知识库向量索引
+POST http://localhost:18081/api/kbs/1/reindex
+Authorization: Bearer {{token}}
+
+### 新建知识库对话
+POST http://localhost:18081/api/conversations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"kbId":1,"title":"新对话"}
+
+### 当前知识库的对话列表
+GET http://localhost:18081/api/conversations?kbId=1
+Authorization: Bearer {{token}}
+
+### 查看完整历史消息
+GET http://localhost:18081/api/conversations/1/messages
+Authorization: Bearer {{token}}
+
+### 重命名对话
+PATCH http://localhost:18081/api/conversations/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"title":"设备预约规则"}
+
+### SSE 问答
+POST http://localhost:18081/api/chat/stream
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"kbId":1,"conversationId":1,"question":"设备预约有哪些要求？"}

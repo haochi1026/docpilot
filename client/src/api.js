@@ -1,0 +1,2 @@
+const KEY='docpilot_token';export const token=()=>localStorage.getItem(KEY);export const saveToken=v=>localStorage.setItem(KEY,v);export const clearToken=()=>localStorage.removeItem(KEY);
+export async function api(path,options={}){const h={...(options.body&&!options.raw?{'Content-Type':'application/json'}:{}),...(options.headers||{})};if(token())h.Authorization=`Bearer ${token()}`;const r=await fetch(path,{...options,headers:h});if(r.status===204)return null;const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.message||`请求失败 (${r.status})`);return b}

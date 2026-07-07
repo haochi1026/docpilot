@@ -1,0 +1,53 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/docpilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root123456}
+    hikari:
+      maximum-pool-size: 20
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    timeout: 1500ms
+  jackson:
+    time-zone: Asia/Shanghai
+
+app:
+  jwt-secret: ${JWT_SECRET:change-this-docpilot-demo-secret-key-at-least-32-bytes}
+  jwt-expire-hours: 24
+  cors-origins: ${CORS_ORIGINS:http://localhost:5174,http://localhost:15174,http://127.0.0.1:15174}
+  queue:
+    mode: ${QUEUE_MODE:local}
+    rocketmq-nameserver: ${ROCKETMQ_NAMESERVER:localhost:9876}
+    topic: docpilot-parse-task
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin123}
+    bucket: ${MINIO_BUCKET:docpilot}
+  ai:
+    mode: ${AI_MODE:local}
+    base-url: ${AI_BASE_URL:http://localhost:11434/v1}
+    api-key: ${AI_API_KEY:ollama}
+    model: ${AI_MODEL:qwen3.5:2b}
+  embedding:
+    mode: ${EMBEDDING_MODE:local}
+    base-url: ${EMBEDDING_BASE_URL:http://localhost:11434/v1}
+    api-key: ${EMBEDDING_API_KEY:ollama}
+    model: ${EMBEDDING_MODEL:qwen3-embedding:0.6b}
+  inference:
+    max-concurrency: ${INFERENCE_MAX_CONCURRENCY:3}
+    per-user-per-minute: ${USER_RATE_LIMIT:12}
+
+management.endpoints.web.exposure.include: health,info
