@@ -4,7 +4,7 @@ services:
     volumes:
       - docpilot_ollama:/root/.ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
   server:
     environment:
       AI_MODE: openai

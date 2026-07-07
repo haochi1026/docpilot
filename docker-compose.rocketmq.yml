@@ -3,7 +3,7 @@ services:
     image: apache/rocketmq:4.9.7
     command: sh mqnamesrv
     ports:
-      - "19876:9876"
+      - "127.0.0.1:19876:9876"
   broker:
     image: apache/rocketmq:4.9.7
     command: sh mqbroker -n namesrv:9876 -c /home/rocketmq/rocketmq-4.9.7/conf/broker.conf

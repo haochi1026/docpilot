@@ -32,7 +32,7 @@ services:
     volumes:
       - docpilot_minio:/data
     ports:
-      - "19001:9001"
+      - "127.0.0.1:19001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -65,7 +65,7 @@ services:
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
     ports:
-      - "18081:8080"
+      - "127.0.0.1:18081:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 10s
@@ -76,7 +76,7 @@ services:
     depends_on:
       server: { condition: service_healthy }
     ports:
-      - "15174:80"
+      - "127.0.0.1:15174:80"
 
 volumes:
   docpilot_mysql:
