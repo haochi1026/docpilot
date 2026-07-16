@@ -5,6 +5,7 @@ import java.util.List;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
+import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -41,6 +42,7 @@ public class RocketMqParseTaskPublisher implements ParseTaskPublisher {
 
     consumer = new DefaultMQPushConsumer("docpilot-parser");
     consumer.setNamesrvAddr(nameserver);
+    consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
     consumer.subscribe(topic, "*");
     consumer.registerMessageListener(
         new MessageListenerConcurrently() {

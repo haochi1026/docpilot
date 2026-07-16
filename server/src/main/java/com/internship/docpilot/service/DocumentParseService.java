@@ -1,6 +1,7 @@
 package com.internship.docpilot.service;
 
 import com.internship.docpilot.repository.DocumentRepository;
+import com.internship.docpilot.repository.OutboxRepository;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,21 +9,40 @@ import java.util.Map;
 import org.apache.tika.Tika;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DocumentParseService {
   private static final Logger log = LoggerFactory.getLogger(DocumentParseService.class);
   private final DocumentRepository documents;
+  private final OutboxRepository outbox;
   private final MinioStorageService storage;
   private final EmbeddingService embeddings;
   private final Tika tika = new Tika();
 
   public DocumentParseService(
-      DocumentRepository d, MinioStorageService s, EmbeddingService embeddings) {
+      DocumentRepository d, OutboxRepository outbox, MinioStorageService s, EmbeddingService embeddings) {
     documents = d;
+    this.outbox = outbox;
     storage = s;
     this.embeddings = embeddings;
+  }
+
+  @Scheduled(initialDelay = 60000L, fixedDelay = 60000L)
+  public void recoverStaleProcessing() {
+    for (Long documentId : documents.staleProcessingIds(10)) {
+      if (documents.releaseStaleProcessing(documentId, 10)) {
+        outbox.create(documentId);
+        log.warn("Recovered stale PROCESSING document {}", documentId);
+      }
+    }
+    for (Long documentId : documents.stalePendingIds(2)) {
+      if (!outbox.hasOpenForDocument(documentId)) {
+        outbox.create(documentId);
+        log.warn("Recovered stale PENDING document {}", documentId);
+      }
+    }
   }
 
   public void parse(Long documentId) {

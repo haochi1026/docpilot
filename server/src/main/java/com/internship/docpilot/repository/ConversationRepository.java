@@ -74,6 +74,21 @@ public class ConversationRepository {
         });
   }
 
+  public List<Map<String, String>> recentModelMessages(Long conversationId, int limit) {
+    return jdbc.query(
+        "SELECT role,content FROM ("
+            + "SELECT id,role,content FROM chat_message "
+            + "WHERE conversation_id=? AND role IN('user','assistant') "
+            + "ORDER BY id DESC LIMIT ?) t ORDER BY id",
+        new Object[] {conversationId, limit},
+        (result, row) -> {
+          Map<String, String> item = new LinkedHashMap<String, String>();
+          item.put("role", result.getString("role"));
+          item.put("content", result.getString("content"));
+          return item;
+        });
+  }
+
   public int messageCount(Long conversationId) {
     Integer count = jdbc.queryForObject(
         "SELECT COUNT(*) FROM chat_message WHERE conversation_id=?",

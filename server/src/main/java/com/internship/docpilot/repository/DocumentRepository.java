@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class DocumentRepository {
@@ -136,6 +137,7 @@ public class DocumentRepository {
         id);
   }
 
+  @Transactional
   public void replaceChunks(Long id, List<String> chunks) {
     jdbc.update("DELETE FROM document_chunk WHERE document_id=?", id);
     List<Object[]> args = new ArrayList<Object[]>();
@@ -162,6 +164,27 @@ public class DocumentRepository {
                 r.getString("vector_json")));
   }
 
+  public Map<String, Object> agentChunk(Long chunkId) {
+    List<Map<String, Object>> rows =
+        jdbc.query(
+            "SELECT d.kb_id,c.id chunk_id,c.document_id,d.original_name,c.page_no,c.content "
+                + "FROM document_chunk c JOIN document d ON d.id=c.document_id "
+                + "WHERE c.id=? AND d.status='SUCCESS'",
+            new Object[] {chunkId},
+            (r, i) -> {
+              Map<String, Object> item = new LinkedHashMap<String, Object>();
+              item.put("kbId", r.getLong("kb_id"));
+              item.put("chunkId", r.getLong("chunk_id"));
+              item.put("documentId", r.getLong("document_id"));
+              item.put("documentName", r.getString("original_name"));
+              item.put("pageNo", r.getObject("page_no"));
+              item.put("content", r.getString("content"));
+              item.put("score", 1.0d);
+              return item;
+            });
+    return rows.isEmpty() ? null : rows.get(0);
+  }
+
   public List<Map<String, Object>> chunksForDocument(Long documentId) {
     return jdbc.query(
         "SELECT id,content FROM document_chunk WHERE document_id=? ORDER BY chunk_no",
@@ -184,10 +207,36 @@ public class DocumentRepository {
   public void saveEmbedding(Long chunkId, String model, String vectorJson) {
     jdbc.update(
         "INSERT INTO chunk_embedding(chunk_id,model_name,vector_json) VALUES(?,?,?) "
-            + "ON DUPLICATE KEY UPDATE model_name=VALUES(model_name),vector_json=VALUES(vector_json)",
+            + "ON DUPLICATE KEY UPDATE vector_json=VALUES(vector_json)",
         chunkId,
         model,
         vectorJson);
+  }
+
+  public List<Long> staleProcessingIds(int leaseMinutes) {
+    return jdbc.query(
+        "SELECT id FROM document WHERE status='PROCESSING' "
+            + "AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE) ORDER BY updated_at LIMIT 50",
+        new Object[] {leaseMinutes},
+        (r, i) -> r.getLong("id"));
+  }
+
+  public List<Long> stalePendingIds(int leaseMinutes) {
+    return jdbc.query(
+        "SELECT id FROM document WHERE status='PENDING' "
+            + "AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE) ORDER BY updated_at LIMIT 50",
+        new Object[] {leaseMinutes},
+        (r, i) -> r.getLong("id"));
+  }
+
+  public boolean releaseStaleProcessing(Long id, int leaseMinutes) {
+    return jdbc.update(
+            "UPDATE document SET status='PENDING',error_message='上次解析任务超时，已恢复为待重试' "
+                + "WHERE id=? AND status='PROCESSING' "
+                + "AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)",
+            id,
+            leaseMinutes)
+        == 1;
   }
 
   public int countChunks(Long kbId) {

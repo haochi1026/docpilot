@@ -42,9 +42,17 @@ public class DocumentService {
     String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase() : "";
     if (!EXT.contains(ext)) throw new BusinessException(HttpStatus.BAD_REQUEST, "暂不支持该文件类型");
     String key = storage.save(file);
-    Long id = documents.insert(kbId, uid, name, key, file.getContentType(), file.getSize());
-    outbox.create(id);
-    return documents.byKb(kbId).stream().filter(x -> x.getId().equals(id)).findFirst().orElse(null);
+    try {
+      Long id = documents.insert(kbId, uid, name, key, file.getContentType(), file.getSize());
+      outbox.create(id);
+      return documents.byKb(kbId).stream().filter(x -> x.getId().equals(id)).findFirst().orElse(null);
+    } catch (Exception e) {
+      try {
+        storage.remove(key);
+      } catch (Exception ignored) {
+      }
+      throw e;
+    }
   }
 
   public List<DocumentView> list(Long uid, String role, Long kbId) {

@@ -102,6 +102,11 @@ public class ConversationService {
     conversations.addMessage(conversationId, "assistant", answer, mapper.writeValueAsString(sources));
   }
 
+  public List<Map<String, String>> recentModelMessages(Long conversationId, Long userId, int limit) {
+    requireOwned(conversationId, userId);
+    return conversations.recentModelMessages(conversationId, limit);
+  }
+
   private Map<String, Object> requireOwned(Long id, Long userId) {
     Map<String, Object> conversation = conversations.owned(id, userId);
     if (conversation == null) throw new BusinessException(HttpStatus.NOT_FOUND, "对话不存在或无权访问");

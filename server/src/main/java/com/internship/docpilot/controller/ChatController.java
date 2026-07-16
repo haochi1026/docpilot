@@ -1,6 +1,7 @@
 package com.internship.docpilot.controller;
 
 import com.internship.docpilot.config.UserPrincipal;
+import com.internship.docpilot.dto.AgentResumeRequest;
 import com.internship.docpilot.dto.ChatRequest;
 import com.internship.docpilot.service.ChatService;
 import javax.validation.Valid;
@@ -21,6 +22,12 @@ public class ChatController {
   @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter stream(
       @AuthenticationPrincipal UserPrincipal p, @Valid @RequestBody ChatRequest r) {
-    return service.chat(p.getUserId(), p.getRole(), r);
+    return service.chat(p.getUserId(), p.getUsername(), p.getRole(), r);
+  }
+
+  @PostMapping(value = "/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter resume(
+      @AuthenticationPrincipal UserPrincipal p, @Valid @RequestBody AgentResumeRequest r) {
+    return service.resume(p.getUserId(), p.getUsername(), p.getRole(), r);
   }
 }

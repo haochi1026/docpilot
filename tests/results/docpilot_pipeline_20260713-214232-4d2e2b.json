@@ -1,0 +1,74 @@
+{
+  "runId": "20260713-214232-4d2e2b",
+  "startedAt": "2026-07-13T21:42:32.849738+08:00",
+  "baseUrl": "http://127.0.0.1:18081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "openai",
+    "aiModel": "qwen3.5:2b",
+    "embeddingMode": "openai",
+    "embeddingModel": "qwen3-embedding:0.6b",
+    "retrievalMode": "向量 + 词片混合检索",
+    "answerMode": "大模型归纳回答",
+    "queueMode": "rocketmq"
+  },
+  "parameters": {
+    "uploads": 1,
+    "workers": 1,
+    "sizeKb": 4,
+    "chatConcurrency": 0,
+    "ollama": false
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 1
+    },
+    "latency": {
+      "count": 1,
+      "minMs": 24.66,
+      "meanMs": 24.66,
+      "p50Ms": 24.66,
+      "p95Ms": 24.66,
+      "p99Ms": 24.66,
+      "maxMs": 24.66
+    },
+    "wallMs": 52.04,
+    "throughputPerSecond": 19.22,
+    "documentIds": [
+      6
+    ]
+  },
+  "parse": {
+    "passed": false,
+    "terminalCount": 0,
+    "successCount": 0,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 0,
+      "minMs": null,
+      "meanMs": null,
+      "p50Ms": null,
+      "p95Ms": null,
+      "p99Ms": null,
+      "maxMs": null
+    },
+    "documents": {}
+  },
+  "chat": {
+    "skipped": true,
+    "reason": "disabled or parsing failed"
+  },
+  "finishedAt": "2026-07-13T21:42:43.303085+08:00",
+  "passed": false,
+  "failedTests": [
+    "asynchronousParse"
+  ]
+}

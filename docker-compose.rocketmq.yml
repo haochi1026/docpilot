@@ -9,6 +9,10 @@ services:
     command: sh mqbroker -n namesrv:9876 -c /home/rocketmq/rocketmq-4.9.7/conf/broker.conf
     environment:
       NAMESRV_ADDR: namesrv:9876
+      # The image bundles JDK 8u372, whose cgroup-v2 metrics initialization can
+      # throw inside StoreUtil on recent Docker Desktop versions. Falling back
+      # to host metrics keeps broker pull/query operations functional.
+      JAVA_OPT_EXT: -XX:-UseContainerSupport
     volumes:
       - ./rocketmq/broker.conf:/home/rocketmq/rocketmq-4.9.7/conf/broker.conf
     depends_on:

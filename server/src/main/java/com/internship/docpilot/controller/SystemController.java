@@ -22,14 +22,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/system")
 public class SystemController {
   private final String queueMode;
+  private final boolean agentEnabled;
   private final EmbeddingService embeddings;
   private final ModelSettingsService settings;
 
   public SystemController(
       @Value("${app.queue.mode:local}") String queueMode,
+      @Value("${app.agent.enabled:false}") boolean agentEnabled,
       EmbeddingService embeddings,
       ModelSettingsService settings) {
     this.queueMode = queueMode;
+    this.agentEnabled = agentEnabled;
     this.embeddings = embeddings;
     this.settings = settings;
   }
@@ -46,7 +49,11 @@ public class SystemController {
     result.put(
         "retrievalMode", embeddings.enabled() ? "向量 + 词片混合检索" : "字符词片检索");
     result.put(
-        "answerMode", config.aiEnabled() ? "大模型归纳回答" : "本地抽取式回答");
+        "answerMode",
+        agentEnabled
+            ? "LangChain / LangGraph Agent"
+            : (config.aiEnabled() ? "大模型归纳回答" : "本地抽取式回答"));
+    result.put("agentEnabled", agentEnabled);
     result.put("queueMode", queueMode);
     return result;
   }

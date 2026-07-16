@@ -1,0 +1,35 @@
+services:
+  agent-service:
+    build: ./agent-service
+    environment:
+      OLLAMA_BASE_URL: ${AGENT_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${AGENT_MODEL:-qwen3.5:2b}
+      DOCPILOT_BASE_URL: http://server:8080
+      DOCPILOT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
+      YANYUE_ENABLED: ${YANYUE_ENABLED:-true}
+      YANYUE_BASE_URL: ${YANYUE_BASE_URL:-http://host.docker.internal:18080}
+      YANYUE_INTERNAL_KEY: ${YANYUE_AGENT_KEY:-yanyue-agent-local-key-change-me}
+      CHECKPOINT_PATH: /data/checkpoints.sqlite
+      TZ: Asia/Shanghai
+    volumes:
+      - docpilot_agent_state:/data
+    ports:
+      - "127.0.0.1:18090:8090"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  server:
+    environment:
+      AGENT_ENABLED: "true"
+      AGENT_BASE_URL: http://agent-service:8090
+      AGENT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
+      AGENT_FALLBACK_TO_RAG: "true"
+    depends_on:
+      agent-service:
+        condition: service_healthy
+
+volumes:
+  docpilot_agent_state:

@@ -19,3 +19,7 @@ backups/
 local-data/
 private/
 uploads/
+__pycache__/
+.pytest_cache/
+build-static/
+client/app-script-check.mjs

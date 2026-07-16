@@ -240,6 +240,26 @@ cd D:\internship\docpilot
 6. 使用管理员进入“模型与索引”，展示模型发现、连接检测、模式切换和索引覆盖率。
 7. 快速连续提问，展示用户限流和推理并发保护。
 
+## LangChain / LangGraph Agent 模式
+
+Agent 模式是可选的 Compose 覆盖层，原有固定 RAG 路径仍可独立运行，并在 Agent 服务异常时作为降级路径。
+
+```powershell
+# 先启动研约，使业务工具可用；两个项目的 YANYUE_AGENT_KEY 必须一致
+cd D:\internship\yanyue
+docker compose up -d --build
+
+cd D:\internship\docpilot
+docker compose -f docker-compose.yml -f docker-compose.agent.yml up -d --build
+```
+
+Agent 服务使用 LangChain `create_agent` 和 ChatOllama，将知识库检索、片段溯源、可访问知识库、
+实验室资源查询和预约操作封装为工具；LangGraph SQLite checkpoint 以对话 ID 维持状态。预约、取消、
+签到由 `HumanInTheLoopMiddleware` 在工具执行前中断，前端批准或拒绝后才使用相同 `thread_id`
+恢复执行。Java 内部网关仍负责用户映射、ACL、事务、唯一约束和幂等，模型无权绕开这些校验。
+
+Agent 服务健康检查：<http://localhost:18090/health>
+
 ## 当前边界
 
 - Apache Tika 不提供 OCR，纯扫描 PDF 需要预先识别或额外接入 OCR 服务。
@@ -247,6 +267,7 @@ cd D:\internship\docpilot
 - Outbox 采用数据库轮询，每次领取一条消息；大规模任务下需要批量领取、分区或专用 CDC 方案。
 - 默认演示账号、数据库密码和 MinIO 密钥不能直接用于公网环境。
 - 项目未进行正式生产压测，因此不声明 QPS、P95 或错误率指标。
+- `qwen3.5:2b` 适合本机链路验证，但小模型的工具选择稳定性有限；面试演示前应使用测试集验证工具选择、参数正确率、引用命中率和写操作审批覆盖率。
 
 ## License
 

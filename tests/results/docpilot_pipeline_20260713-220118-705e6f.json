@@ -1,0 +1,189 @@
+{
+  "runId": "20260713-220118-705e6f",
+  "startedAt": "2026-07-13T22:01:18.028021+08:00",
+  "baseUrl": "http://127.0.0.1:18081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "openai",
+    "aiModel": "qwen3.5:2b",
+    "embeddingMode": "openai",
+    "embeddingModel": "qwen3-embedding:0.6b",
+    "retrievalMode": "向量 + 词片混合检索",
+    "answerMode": "大模型归纳回答",
+    "queueMode": "rocketmq"
+  },
+  "parameters": {
+    "uploads": 4,
+    "workers": 2,
+    "sizeKb": 16,
+    "chatConcurrency": 1,
+    "ollama": false
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 4
+    },
+    "latency": {
+      "count": 4,
+      "minMs": 31.3,
+      "meanMs": 41.33,
+      "p50Ms": 39.71,
+      "p95Ms": 52.77,
+      "p99Ms": 52.77,
+      "maxMs": 52.77
+    },
+    "wallMs": 130.57,
+    "throughputPerSecond": 30.63,
+    "documentIds": [
+      9,
+      8,
+      10,
+      11
+    ]
+  },
+  "parse": {
+    "passed": true,
+    "terminalCount": 4,
+    "successCount": 4,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 4,
+      "minMs": 3195.56,
+      "meanMs": 5891.99,
+      "p50Ms": 4745.55,
+      "p95Ms": 8847.94,
+      "p99Ms": 8847.94,
+      "maxMs": 8847.94
+    },
+    "documents": {
+      "8": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3195.56
+      },
+      "9": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4745.55
+      },
+      "10": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 6778.9
+      },
+      "11": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 8847.94
+      }
+    }
+  },
+  "chat": {
+    "passed": true,
+    "firstTokenLatency": {
+      "count": 1,
+      "minMs": 51490.74,
+      "meanMs": 51490.74,
+      "p50Ms": 51490.74,
+      "p95Ms": 51490.74,
+      "p99Ms": 51490.74,
+      "maxMs": 51490.74
+    },
+    "totalLatency": {
+      "count": 1,
+      "minMs": 51912.71,
+      "meanMs": 51912.71,
+      "p50Ms": 51912.71,
+      "p95Ms": 51912.71,
+      "p99Ms": 51912.71,
+      "maxMs": 51912.71
+    },
+    "results": [
+      {
+        "status": 200,
+        "firstTokenMs": 51490.74,
+        "totalMs": 51912.71,
+        "tokenChars": 50,
+        "events": [
+          "conversation",
+          "status",
+          "sources",
+          "status",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "token",
+          "done"
+        ],
+        "error": null,
+        "passed": true
+      }
+    ]
+  },
+  "documentCleanup": [
+    {
+      "documentId": 9,
+      "status": 204
+    },
+    {
+      "documentId": 8,
+      "status": 204
+    },
+    {
+      "documentId": 10,
+      "status": 204
+    },
+    {
+      "documentId": 11,
+      "status": 204
+    }
+  ],
+  "finishedAt": "2026-07-13T22:02:19.053040+08:00",
+  "passed": true,
+  "failedTests": []
+}

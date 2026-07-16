@@ -1,0 +1,114 @@
+{
+  "runId": "20260713-221257-9eaa05",
+  "startedAt": "2026-07-13T22:12:57.830068+08:00",
+  "baseUrl": "http://127.0.0.1:18081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "openai",
+    "aiModel": "qwen3.5:2b",
+    "embeddingMode": "openai",
+    "embeddingModel": "qwen3-embedding:0.6b",
+    "retrievalMode": "向量 + 词片混合检索",
+    "answerMode": "大模型归纳回答",
+    "queueMode": "local"
+  },
+  "parameters": {
+    "uploads": 4,
+    "workers": 2,
+    "sizeKb": 16,
+    "chatConcurrency": 0,
+    "ollama": false
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 4
+    },
+    "latency": {
+      "count": 4,
+      "minMs": 111.99,
+      "meanMs": 117.72,
+      "p50Ms": 113.73,
+      "p95Ms": 127.51,
+      "p99Ms": 127.51,
+      "maxMs": 127.51
+    },
+    "wallMs": 286.26,
+    "throughputPerSecond": 13.97,
+    "documentIds": [
+      12,
+      13,
+      14,
+      15
+    ]
+  },
+  "parse": {
+    "passed": true,
+    "terminalCount": 4,
+    "successCount": 4,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 4,
+      "minMs": 12002.08,
+      "meanMs": 12494.11,
+      "p50Ms": 12011.62,
+      "p95Ms": 12987.01,
+      "p99Ms": 12987.01,
+      "maxMs": 12987.01
+    },
+    "documents": {
+      "12": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 12011.62
+      },
+      "13": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 12002.08
+      },
+      "14": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 12987.01
+      },
+      "15": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 12975.72
+      }
+    }
+  },
+  "chat": {
+    "skipped": true,
+    "reason": "disabled or parsing failed"
+  },
+  "documentCleanup": [
+    {
+      "documentId": 12,
+      "status": 204
+    },
+    {
+      "documentId": 13,
+      "status": 204
+    },
+    {
+      "documentId": 14,
+      "status": 204
+    },
+    {
+      "documentId": 15,
+      "status": 204
+    }
+  ],
+  "finishedAt": "2026-07-13T22:13:11.236585+08:00",
+  "passed": true,
+  "failedTests": []
+}

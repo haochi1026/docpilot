@@ -49,5 +49,12 @@ app:
   inference:
     max-concurrency: ${INFERENCE_MAX_CONCURRENCY:3}
     per-user-per-minute: ${USER_RATE_LIMIT:12}
+  agent:
+    enabled: ${AGENT_ENABLED:false}
+    base-url: ${AGENT_BASE_URL:http://localhost:8090}
+    internal-key: ${AGENT_INTERNAL_KEY:change-this-agent-internal-key}
+    fallback-to-rag: ${AGENT_FALLBACK_TO_RAG:true}
+    connect-timeout-ms: ${AGENT_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AGENT_READ_TIMEOUT_MS:180000}
 
 management.endpoints.web.exposure.include: health,info

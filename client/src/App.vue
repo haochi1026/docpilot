@@ -27,6 +27,7 @@ const currentConversationId = ref(null)
 const conversationBusy = ref(false)
 const uploading = ref(false)
 const asking = ref(false)
+const pendingApproval = ref(null)
 const notice = ref('')
 const error = ref('')
 const documentKeyword = ref('')
@@ -296,6 +297,79 @@ async function openConversationFromOverview(item) {
   if (target) await selectConversation(target)
   else flash('该历史对话已被删除', true)
 }
+
+function approvalActions(payload) {
+  const interrupts = Array.isArray(payload) ? payload : [payload]
+  return interrupts.flatMap(item => item?.action_requests || item?.actionRequests || [])
+}
+
+async function consumeChatStream(response, answer) {
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.message || `请求失败 (${response.status})`)
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const blocks = buffer.split('\n\n')
+    buffer = blocks.pop() || ''
+    for (const block of blocks) {
+      let event = 'message'; let data = ''
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        if (line.startsWith('data:')) data += line.slice(5).trim()
+      }
+      if (event === 'conversation') currentConversationId.value = Number(data)
+      else if (event === 'token') answer.content += data
+      else if (event === 'replace') answer.content = data
+      else if (event === 'status') answer.status = data
+      else if (event === 'sources') {
+        try { answer.sources = JSON.parse(data) } catch (_) {}
+      } else if (event === 'approval') {
+        try {
+          answer.approval = JSON.parse(data)
+          pendingApproval.value = answer
+          answer.status = '等待你确认操作'
+        } catch (_) { throw new Error('Agent 审批数据解析失败') }
+      } else if (event === 'error') throw new Error(data)
+      else if (event === 'done') {
+        answer.status = ''
+        answer.approval = null
+        pendingApproval.value = null
+      }
+    }
+  }
+}
+
+async function reviewAgent(answer, decision) {
+  if (asking.value || !answer?.approval || !currentConversationId.value) return
+  asking.value = true
+  answer.status = decision === 'approve' ? '正在执行已批准操作…' : '正在拒绝操作并恢复 Agent…'
+  try {
+    const response = await fetch('/api/chat/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({
+        kbId: currentKb.value.id,
+        conversationId: currentConversationId.value,
+        decision
+      })
+    })
+    answer.approval = null
+    pendingApproval.value = null
+    await consumeChatStream(response, answer)
+  } catch (e) { answer.content += `\n\n[错误] ${e.message}` }
+  finally {
+    answer.status = answer.approval ? '等待你确认操作' : ''
+    asking.value = false
+    await Promise.all([loadWorkspace(), refreshConversationList(currentConversationId.value)])
+  }
+}
+
 async function ask() {
   if (!question.value.trim() || asking.value || !currentKb.value) return
   if (!currentConversationId.value) {
@@ -304,7 +378,7 @@ async function ask() {
   }
   const text = question.value.trim()
   messages.value.push({ role: 'user', content: text })
-  const answer = { role: 'assistant', content: '', sources: [], status: '正在连接…' }
+  const answer = { role: 'assistant', content: '', sources: [], status: '正在连接…', approval: null }
   messages.value.push(answer)
   asking.value = true
   question.value = ''
@@ -314,37 +388,10 @@ async function ask() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
       body: JSON.stringify({ kbId: currentKb.value.id, conversationId: currentConversationId.value, question: text })
     })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      throw new Error(body.message || `请求失败 (${response.status})`)
-    }
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const blocks = buffer.split('\n\n')
-      buffer = blocks.pop() || ''
-      for (const block of blocks) {
-        let event = 'message'; let data = ''
-        for (const line of block.split('\n')) {
-          if (line.startsWith('event:')) event = line.slice(6).trim()
-          if (line.startsWith('data:')) data += line.slice(5).trim()
-        }
-        if (event === 'conversation') currentConversationId.value = Number(data)
-        else if (event === 'token') answer.content += data
-        else if (event === 'status') answer.status = data
-        else if (event === 'sources') {
-          try { answer.sources = JSON.parse(data) } catch (_) {}
-        } else if (event === 'error') throw new Error(data)
-        else if (event === 'done') answer.status = ''
-      }
-    }
+    await consumeChatStream(response, answer)
   } catch (e) { answer.content += `\n\n[错误] ${e.message}` }
   finally {
-    answer.status = ''
+    answer.status = answer.approval ? '等待你确认操作' : ''
     asking.value = false
     await Promise.all([loadWorkspace(), refreshConversationList(currentConversationId.value)])
   }
@@ -433,11 +480,11 @@ onBeforeUnmount(() => clearInterval(poller))
             <div class="conversation">
               <div v-if="conversationBusy" class="conversation-loading">正在读取历史消息…</div>
               <div v-else-if="!messages.length" class="welcome"><div>✦</div><h2>从 {{ readyCount }} 篇就绪文档中提问</h2><p>每个对话独立保存问题、回答和引用来源。</p><div><button @click="question='请概括知识库中的核心内容'">概括核心内容</button><button @click="question='有哪些需要特别注意的规定？'">查找注意事项</button><button @click="question='请列出关键流程和时间要求'">整理关键流程</button></div></div>
-              <div v-for="(message,index) in messages" :key="message.id || index" class="message" :class="message.role"><div class="avatar">{{ message.role==='user'?'我':'DP' }}</div><div class="bubble"><p>{{ message.content }}<span v-if="message.status" class="typing">{{ message.status }}</span></p><details v-if="message.sources?.length"><summary>{{ message.sources.length }} 条引用来源</summary><div v-for="(source,sourceIndex) in message.sources" :key="sourceIndex" class="source"><div><b>[{{ sourceIndex+1 }}] {{ source.documentName }}</b><em>相关度 {{ Math.round(source.score*100) }}%</em></div><span>{{ source.content.slice(0,220) }}{{source.content.length>220?'…':''}}</span></div></details></div></div>
+              <div v-for="(message,index) in messages" :key="message.id || index" class="message" :class="message.role"><div class="avatar">{{ message.role==='user'?'我':'DP' }}</div><div class="bubble"><p>{{ message.content }}<span v-if="message.status" class="typing">{{ message.status }}</span></p><div v-if="message.approval" class="agent-approval"><b>Agent 请求执行以下写操作</b><div v-for="(action,actionIndex) in approvalActions(message.approval)" :key="actionIndex" class="approval-action"><strong>{{ action.name }}</strong><code>{{ JSON.stringify(action.arguments) }}</code></div><div class="approval-buttons"><button :disabled="asking" @click="reviewAgent(message,'reject')">拒绝</button><button :disabled="asking" class="approve" @click="reviewAgent(message,'approve')">批准并继续</button></div></div><details v-if="message.sources?.length"><summary>{{ message.sources.length }} 条引用来源</summary><div v-for="(source,sourceIndex) in message.sources" :key="sourceIndex" class="source"><div><b>[{{ sourceIndex+1 }}] {{ source.documentName }}</b><em>相关度 {{ Math.round(source.score*100) }}%</em></div><span>{{ source.content.slice(0,220) }}{{source.content.length>220?'…':''}}</span></div></details></div></div>
             </div>
             <form class="ask" @submit.prevent="ask"><textarea v-model="question" rows="2" placeholder="基于当前知识库提问，Ctrl + Enter 发送" @keydown.ctrl.enter="ask"></textarea><button :disabled="asking||conversationBusy||!readyCount">{{ asking?'生成中':'发送' }}</button></form>
           </div>
-          <aside class="chat-guide panel"><div class="panel-title"><div><b>当前连接</b></div></div><div class="connection-list"><div><span>回答</span><b>{{ capabilities.answerMode }}</b></div><div><span>检索</span><b>{{ capabilities.retrievalMode }}</b></div><div><span>模型</span><b>{{ capabilities.aiModel }}</b></div><div><span>向量</span><b>{{ capabilities.embeddingModel }}</b></div></div><div class="mode-card" :class="{enhanced:capabilities.aiMode==='openai'}"><b>{{ capabilities.aiMode==='openai'?'模型服务可用':'本地模式' }}</b><span>单用户 12 次/分钟 · 最多 3 路推理</span></div></aside>
+          <aside class="chat-guide panel"><div class="panel-title"><div><b>当前连接</b></div></div><div class="connection-list"><div><span>回答</span><b>{{ capabilities.answerMode }}</b></div><div><span>检索</span><b>{{ capabilities.retrievalMode }}</b></div><div><span>模型</span><b>{{ capabilities.aiModel }}</b></div><div><span>向量</span><b>{{ capabilities.embeddingModel }}</b></div></div><div class="mode-card" :class="{enhanced:capabilities.agentEnabled||capabilities.aiMode==='openai'}"><b>{{ capabilities.agentEnabled?'Agent 工具编排已启用':(capabilities.aiMode==='openai'?'模型服务可用':'本地模式') }}</b><span>单用户 12 次/分钟 · 最多 3 路推理</span></div></aside>
         </section>
       </template>
 

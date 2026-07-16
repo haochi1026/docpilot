@@ -30,23 +30,47 @@ public class OutboxRepository {
     return x.isEmpty() ? null : x.get(0);
   }
 
-  public boolean claim(Long id) {
+  public boolean claim(Long id, String owner) {
     return jdbc.update(
-            "UPDATE outbox_message SET status='SENDING' WHERE id=? AND status IN('PENDING','RETRY')",
+            "UPDATE outbox_message SET status='SENDING',claimed_at=NOW(),claimed_by=? "
+                + "WHERE id=? AND status IN('PENDING','RETRY')",
+            owner,
             id)
         == 1;
   }
 
   public void sent(Long id) {
-    jdbc.update("UPDATE outbox_message SET status='SENT' WHERE id=?", id);
+    jdbc.update(
+        "UPDATE outbox_message SET status='SENT',claimed_at=NULL,claimed_by=NULL WHERE id=?", id);
   }
 
   public void retry(Long id, int count) {
     jdbc.update(
-        "UPDATE outbox_message SET status=IF(? >= 5,'DEAD','RETRY'),retry_count=?,next_retry_at=DATE_ADD(NOW(),INTERVAL ? SECOND) WHERE id=?",
+        "UPDATE outbox_message SET status=IF(? >= 5,'DEAD','RETRY'),retry_count=?,"
+            + "claimed_at=NULL,claimed_by=NULL,next_retry_at=DATE_ADD(NOW(),INTERVAL ? SECOND) "
+            + "WHERE id=?",
         count,
         count,
         Math.min(60, 1 << Math.min(count, 5)),
         id);
+  }
+
+  public int recoverStaleSending(int leaseMinutes) {
+    return jdbc.update(
+        "UPDATE outbox_message SET status='RETRY',retry_count=retry_count+1,"
+            + "claimed_at=NULL,claimed_by=NULL,next_retry_at=NOW() "
+            + "WHERE status='SENDING' AND claimed_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)",
+        leaseMinutes);
+  }
+
+  public boolean hasOpenForDocument(Long documentId) {
+    Integer count =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM outbox_message "
+                + "WHERE aggregate_id=? AND event_type='DOCUMENT_PARSE' "
+                + "AND status IN('PENDING','RETRY','SENDING')",
+            new Object[] {documentId},
+            Integer.class);
+    return count != null && count > 0;
   }
 }
