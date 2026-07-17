@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -24,6 +25,7 @@ public class AgentClient {
   private final ObjectMapper mapper;
   private final boolean enabled;
   private final String baseUrl;
+  private final String serviceKey;
   private final int connectTimeoutMs;
   private final int readTimeoutMs;
 
@@ -31,11 +33,13 @@ public class AgentClient {
       ObjectMapper mapper,
       @Value("${app.agent.enabled:false}") boolean enabled,
       @Value("${app.agent.base-url:http://localhost:8090}") String baseUrl,
+      @Value("${app.agent.service-key:change-this-agent-service-key}") String serviceKey,
       @Value("${app.agent.connect-timeout-ms:2000}") int connectTimeoutMs,
       @Value("${app.agent.read-timeout-ms:180000}") int readTimeoutMs) {
     this.mapper = mapper;
     this.enabled = enabled;
     this.baseUrl = baseUrl;
+    this.serviceKey = serviceKey;
     this.connectTimeoutMs = connectTimeoutMs;
     this.readTimeoutMs = readTimeoutMs;
   }
@@ -63,8 +67,10 @@ public class AgentClient {
     connection.setDoOutput(true);
     connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
     connection.setRequestProperty("Accept", "application/x-ndjson");
+    connection.setRequestProperty("X-Agent-Service-Key", serviceKey);
 
     Map<String, Object> payload = new LinkedHashMap<String, Object>();
+    payload.put("request_id", UUID.randomUUID().toString());
     payload.put("thread_id", "docpilot-" + conversationId);
     payload.put("username", username);
     payload.put("user_id", userId);

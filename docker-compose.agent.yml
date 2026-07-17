@@ -1,7 +1,23 @@
 services:
+  agent-postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${AGENT_POSTGRES_DB:-docpilot_agent}
+      POSTGRES_USER: ${AGENT_POSTGRES_USER:-docpilot_agent}
+      POSTGRES_PASSWORD: ${AGENT_POSTGRES_PASSWORD:-docpilot-agent-local-password}
+    volumes:
+      - docpilot_agent_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AGENT_POSTGRES_USER:-docpilot_agent} -d ${AGENT_POSTGRES_DB:-docpilot_agent}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   agent-service:
     build: ./agent-service
     environment:
+      APP_ENV: ${APP_ENV:-development}
+      AGENT_SERVICE_KEY: ${AGENT_SERVICE_KEY:-docpilot-agent-service-local-key}
       OLLAMA_BASE_URL: ${AGENT_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${AGENT_MODEL:-qwen3.5:2b}
       DOCPILOT_BASE_URL: http://server:8080
@@ -9,23 +25,36 @@ services:
       YANYUE_ENABLED: ${YANYUE_ENABLED:-true}
       YANYUE_BASE_URL: ${YANYUE_BASE_URL:-http://host.docker.internal:18080}
       YANYUE_INTERNAL_KEY: ${YANYUE_AGENT_KEY:-yanyue-agent-local-key-change-me}
+      CHECKPOINT_BACKEND: ${CHECKPOINT_BACKEND:-postgres}
       CHECKPOINT_PATH: /data/checkpoints.sqlite
+      CHECKPOINT_DSN: postgresql://${AGENT_POSTGRES_USER:-docpilot_agent}:${AGENT_POSTGRES_PASSWORD:-docpilot-agent-local-password}@agent-postgres:5432/${AGENT_POSTGRES_DB:-docpilot_agent}?sslmode=disable
+      AGENT_MODEL_RUN_LIMIT: ${AGENT_MODEL_RUN_LIMIT:-8}
+      AGENT_TOOL_RUN_LIMIT: ${AGENT_TOOL_RUN_LIMIT:-12}
+      TOOL_MAX_RETRIES: ${TOOL_MAX_RETRIES:-2}
+      TOOL_CIRCUIT_FAILURES: ${TOOL_CIRCUIT_FAILURES:-5}
+      AGENTOPS_ENABLED: ${AGENTOPS_ENABLED:-false}
+      AGENTOPS_BASE_URL: ${AGENTOPS_BASE_URL:-http://host.docker.internal:18100}
+      AGENTOPS_API_KEY: ${AGENTOPS_API_KEY:-}
       TZ: Asia/Shanghai
     volumes:
       - docpilot_agent_state:/data
     ports:
       - "127.0.0.1:18090:8090"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health/ready')"]
       interval: 10s
       timeout: 3s
       retries: 20
+    depends_on:
+      agent-postgres:
+        condition: service_healthy
 
   server:
     environment:
       AGENT_ENABLED: "true"
       AGENT_BASE_URL: http://agent-service:8090
       AGENT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
+      AGENT_SERVICE_KEY: ${AGENT_SERVICE_KEY:-docpilot-agent-service-local-key}
       AGENT_FALLBACK_TO_RAG: "true"
     depends_on:
       agent-service:
@@ -33,3 +62,4 @@ services:
 
 volumes:
   docpilot_agent_state:
+  docpilot_agent_postgres:

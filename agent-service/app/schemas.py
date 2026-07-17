@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class AgentChatRequest(BaseModel):
+    request_id: str | None = Field(default=None, min_length=8, max_length=120)
     thread_id: str = Field(min_length=1, max_length=120)
     username: str = Field(min_length=1, max_length=64)
     user_id: int = Field(gt=0)
@@ -30,6 +31,16 @@ class AgentEvent(BaseModel):
         "status", "token", "replace", "sources", "approval", "done", "error"
     ]
     data: Any
+
+
+class AgentEvaluationResponse(BaseModel):
+    request_id: str
+    status: Literal["SUCCESS", "INTERRUPTED", "ERROR"]
+    answer: str = ""
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    event_types: list[str] = Field(default_factory=list)
+    approval_requested: bool = False
+    error: str | None = None
 
 
 class SearchRequest(BaseModel):

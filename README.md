@@ -257,11 +257,12 @@ docker compose -f docker-compose.yml -f docker-compose.agent.yml up -d --build
 ```
 
 Agent 服务使用 LangChain `create_agent` 和 ChatOllama，将知识库检索、片段溯源、可访问知识库、
-实验室资源查询和预约操作封装为工具；LangGraph SQLite checkpoint 以对话 ID 维持状态。预约、取消、
+实验室资源查询和预约操作封装为工具；LangGraph checkpoint 以对话 ID 维持状态，开发环境可用 SQLite，
+生产化 Compose 默认使用 PostgreSQL。预约、取消、
 签到由 `HumanInTheLoopMiddleware` 在工具执行前中断，前端批准或拒绝后才使用相同 `thread_id`
 恢复执行。Java 内部网关仍负责用户映射、ACL、事务、唯一约束和幂等，模型无权绕开这些校验。
 
-Agent 服务健康检查：<http://localhost:18090/health>
+Agent 服务就绪检查：<http://localhost:18090/health/ready>；指标：<http://localhost:18090/metrics>。
 
 ### Agent 服务边界
 
@@ -283,11 +284,14 @@ Agent 服务健康检查：<http://localhost:18090/health>
 
 ### 状态、审批与流式事件
 
-- Java 将 `conversationId` 映射为稳定 `thread_id`，Agent 使用 SQLite `SqliteSaver` 保存单机演示所需的 checkpoint。
+- Java 将 `conversationId` 映射为稳定 `thread_id`；本地可使用 SQLite checkpoint，Compose 默认使用 PostgreSQL checkpoint，使中断审批状态可跨 Agent 容器重启恢复。
 - `ToolRuntime` 上下文携带 `username`、`user_id`、`role`、`kb_id` 和 `thread_id`；这些字段不作为可由模型填写的普通工具参数暴露。
 - 写工具由 `HumanInTheLoopMiddleware` 暂停，前端批准或拒绝后通过相同 `thread_id` 恢复；研约网关还会再次检查 `X-Agent-Approval`。
 - Python 以 NDJSON 输出 `status`、`token`、`replace`、`sources`、`approval`、`done` 与 `error` 事件，Java 再转换成浏览器原有 SSE 协议。
 - 普通问答在 Agent 连接失败、超时或执行异常时回退固定 RAG；审批恢复依赖 checkpoint，不进行无状态重放。
+- Java 调用 Agent 服务时使用独立服务密钥；单次运行限制模型与工具调用次数，防止循环失控。
+- 内部工具网关对安全读取和带 `requestId` 的幂等写入执行指数退避重试，并以连续失败熔断保护下游服务。
+- 可选接入 AgentOps Hub 上报 Trace/Tool Span；`/v1/agent/evaluate` 提供回归评测所需的结构化结果，观测平台异常不会阻断业务回答。
 
 ## 当前边界
 
