@@ -14,8 +14,18 @@ spring:
       maximum-pool-size: 20
   sql:
     init:
-      mode: always
+      # Flyway is the sole schema authority. Keep this disabled in every profile
+      # so an application restart cannot silently mutate an existing database.
+      mode: never
       encoding: UTF-8
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+    out-of-order: false
+    clean-disabled: true
+    locations: classpath:db/migration
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
@@ -24,6 +34,8 @@ spring:
     time-zone: Asia/Shanghai
 
 app:
+  document:
+    revision-retention-count: ${DOCUMENT_REVISION_RETENTION_COUNT:3}
   jwt-secret: ${JWT_SECRET:change-this-docpilot-demo-secret-key-at-least-32-bytes}
   jwt-expire-hours: 24
   cors-origins: ${CORS_ORIGINS:http://localhost:5174,http://localhost:15174,http://127.0.0.1:15174}
@@ -46,16 +58,44 @@ app:
     base-url: ${EMBEDDING_BASE_URL:http://localhost:11434/v1}
     api-key: ${EMBEDDING_API_KEY:ollama}
     model: ${EMBEDDING_MODEL:qwen3-embedding:0.6b}
+    dimension: ${EMBEDDING_DIMENSION:1024}
+  vector-store:
+    enabled: ${VECTOR_STORE_ENABLED:true}
+    url: ${VECTOR_DB_URL:jdbc:postgresql://localhost:5433/docpilot_vector}
+    username: ${VECTOR_DB_USERNAME:docpilot_vector}
+    password: ${VECTOR_DB_PASSWORD:docpilot-vector-local-password}
+    candidate-limit: ${VECTOR_CANDIDATE_LIMIT:80}
+  retrieval:
+    min-score: ${RETRIEVAL_MIN_SCORE:0.20}
+    min-lexical-score: ${RETRIEVAL_MIN_LEXICAL_SCORE:0.05}
+    min-vector-score: ${RETRIEVAL_MIN_VECTOR_SCORE:0.45}
+    lexical-weight: ${RETRIEVAL_LEXICAL_WEIGHT:0.35}
+    vector-weight: ${RETRIEVAL_VECTOR_WEIGHT:0.65}
+    lexical-candidate-limit: ${LEXICAL_CANDIDATE_LIMIT:160}
+  chunking:
+    max-tokens: ${CHUNK_MAX_TOKENS:480}
+    overlap-tokens: ${CHUNK_OVERLAP_TOKENS:60}
+  ocr:
+    enabled: ${OCR_ENABLED:true}
+    language: ${OCR_LANGUAGE:chi_sim+eng}
+    min-page-text-chars: ${OCR_MIN_PAGE_TEXT_CHARS:20}
+    max-pages: ${OCR_MAX_PAGES:100}
+    timeout-seconds: ${OCR_TIMEOUT_SECONDS:60}
+    min-confidence: ${OCR_MIN_CONFIDENCE:45}
   inference:
     max-concurrency: ${INFERENCE_MAX_CONCURRENCY:3}
     per-user-per-minute: ${USER_RATE_LIMIT:12}
+    lease-seconds: ${INFERENCE_LEASE_SECONDS:240}
+    local-fallback: ${INFERENCE_LOCAL_FALLBACK:true}
   agent:
     enabled: ${AGENT_ENABLED:false}
     base-url: ${AGENT_BASE_URL:http://localhost:8090}
     service-key: ${AGENT_SERVICE_KEY:change-this-agent-service-key}
     internal-key: ${AGENT_INTERNAL_KEY:change-this-agent-internal-key}
+    approval-secret: ${AGENT_APPROVAL_SECRET:${JWT_SECRET:change-this-docpilot-demo-secret-key-at-least-32-bytes}}
+    approval-ttl-minutes: ${AGENT_APPROVAL_TTL_MINUTES:15}
     fallback-to-rag: ${AGENT_FALLBACK_TO_RAG:true}
     connect-timeout-ms: ${AGENT_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms: ${AGENT_READ_TIMEOUT_MS:180000}
 
-management.endpoints.web.exposure.include: health,info
+management.endpoints.web.exposure.include: health,info,prometheus

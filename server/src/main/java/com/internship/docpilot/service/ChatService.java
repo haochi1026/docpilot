@@ -24,6 +24,7 @@ public class ChatService {
   private final ConversationService conversations;
   private final Executor executor;
   private final JdbcTemplate jdbc;
+  private final AgentApprovalService approvals;
 
   public ChatService(
       KnowledgeBaseService knowledgeBases,
@@ -34,7 +35,8 @@ public class ChatService {
       InferenceGuard guard,
       ConversationService conversations,
       @Qualifier("chatExecutor") Executor executor,
-      JdbcTemplate jdbc) {
+      JdbcTemplate jdbc,
+      AgentApprovalService approvals) {
     this.knowledgeBases = knowledgeBases;
     this.retrieval = retrieval;
     this.ai = ai;
@@ -44,6 +46,7 @@ public class ChatService {
     this.conversations = conversations;
     this.executor = executor;
     this.jdbc = jdbc;
+    this.approvals = approvals;
   }
 
   public SseEmitter chat(Long uid, String username, String role, ChatRequest request) {
@@ -71,13 +74,15 @@ public class ChatService {
     knowledgeBases.requireRead(request.getKbId(), uid, role);
     Long conversationId =
         conversations.ensure(uid, role, request.getKbId(), request.getConversationId());
+    AgentApprovalService.Decision approval =
+        approvals.decide(uid, conversationId, request.getApprovalId(), request.getDecision());
     InferenceGuard.Permit permit = guard.acquire(uid);
     SseEmitter emitter = new SseEmitter(180000L);
     try {
       executor.execute(
           () ->
               runResume(
-                  uid, username, role, conversationId, request, permit, emitter));
+                  uid, username, role, conversationId, request, approval, permit, emitter));
     } catch (RuntimeException e) {
       guard.release(permit);
       throw e;
@@ -109,10 +114,20 @@ public class ChatService {
                   conversationId,
                   request.getQuestion(),
                   null,
+                  null,
+                  null,
                   history,
                   emitter);
           sourceCount = result.getSources().size();
           if (result.isInterrupted()) {
+            Map<String, Object> approval =
+                approvals.create(
+                    uid,
+                    conversationId,
+                    request.getKbId(),
+                    "docpilot-" + conversationId,
+                    result.getApproval());
+            emitter.send(SseEmitter.event().name("approval").data(approval));
             emitter.complete();
             return;
           }
@@ -140,6 +155,7 @@ public class ChatService {
       String role,
       Long conversationId,
       AgentResumeRequest request,
+      AgentApprovalService.Decision approval,
       InferenceGuard.Permit permit,
       SseEmitter emitter) {
     long start = System.currentTimeMillis();
@@ -157,12 +173,25 @@ public class ChatService {
               conversationId,
               null,
               request.getDecision(),
+              approval.getApprovalId(),
+              approval.getToken(),
               Collections.<Map<String, String>>emptyList(),
               emitter);
       sourceCount = result.getSources().size();
       if (result.isInterrupted()) {
+        Map<String, Object> nextApproval =
+            approvals.create(
+                uid,
+                conversationId,
+                request.getKbId(),
+                "docpilot-" + conversationId,
+                result.getApproval());
+        emitter.send(SseEmitter.event().name("approval").data(nextApproval));
         emitter.complete();
         return;
+      }
+      if ("reject".equals(request.getDecision())) {
+        approvals.markRejectedResumed(uid, conversationId, approval.getApprovalId());
       }
       persistAgentAnswer(conversationId, uid, result, emitter);
     } catch (Exception e) {
@@ -176,6 +205,13 @@ public class ChatService {
           sourceCount,
           start);
     }
+  }
+
+  public Map<String, Object> pendingApproval(
+      Long uid, String role, Long conversationId) {
+    conversations.requireOwnedView(conversationId, uid, role);
+    Map<String, Object> pending = approvals.pending(uid, conversationId);
+    return pending == null ? Collections.<String, Object>emptyMap() : pending;
   }
 
   private void persistAgentAnswer(

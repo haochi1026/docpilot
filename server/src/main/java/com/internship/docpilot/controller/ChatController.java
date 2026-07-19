@@ -5,6 +5,7 @@ import com.internship.docpilot.dto.AgentResumeRequest;
 import com.internship.docpilot.dto.ChatRequest;
 import com.internship.docpilot.service.ChatService;
 import javax.validation.Valid;
+import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -29,5 +30,11 @@ public class ChatController {
   public SseEmitter resume(
       @AuthenticationPrincipal UserPrincipal p, @Valid @RequestBody AgentResumeRequest r) {
     return service.resume(p.getUserId(), p.getUsername(), p.getRole(), r);
+  }
+
+  @GetMapping("/approvals/pending")
+  public Map<String, Object> pendingApproval(
+      @AuthenticationPrincipal UserPrincipal p, @RequestParam Long conversationId) {
+    return service.pendingApproval(p.getUserId(), p.getRole(), conversationId);
   }
 }

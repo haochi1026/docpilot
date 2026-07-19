@@ -51,14 +51,21 @@ class InternalGateway:
         tool_name: str,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
-        approved: bool = False,
+        approval_id: str | None = None,
+        approval_token: str | None = None,
         retryable: bool = True,
     ) -> Any:
+        if self.settings.agentops_governance_enabled and self.trace_client:
+            approved = bool(approval_id and approval_token)
+            if not self.trace_client.authorize_tool(tool_name, method, approved):
+                raise GatewayError("AgentOps tool policy denied this call")
         circuit_key = base_url.rstrip("/")
         self._check_circuit(circuit_key)
         headers = {"X-Agent-Key": key, "X-Username": username}
-        if approved:
-            headers["X-Agent-Approval"] = "approved"
+        if approval_id:
+            headers["X-Agent-Approval-Id"] = approval_id
+        if approval_token:
+            headers["X-Agent-Approval-Token"] = approval_token
 
         attempts = self.settings.gateway_max_retries + 1 if retryable else 1
         started = time.perf_counter()
@@ -187,72 +194,43 @@ class InternalGateway:
             tool_name="get_chunk_source",
         )
 
-    def list_lab_resources(self, username: str) -> list[dict[str, Any]]:
+    def list_documents(self, username: str, kb_id: int) -> list[dict[str, Any]]:
         return self._request(
             "GET",
-            self.settings.yanyue_base_url,
-            "/api/internal/agent/resources",
-            self.settings.yanyue_internal_key,
+            self.settings.docpilot_base_url,
+            f"/api/internal/agent/knowledge-bases/{kb_id}/documents",
+            self.settings.docpilot_internal_key,
             username,
-            tool_name="list_lab_resources",
+            tool_name="list_documents",
         )
 
-    def resource_availability(
-        self, username: str, resource_id: int, date: str
+    def get_document_diagnostics(
+        self, username: str, document_id: int
     ) -> dict[str, Any]:
         return self._request(
             "GET",
-            self.settings.yanyue_base_url,
-            f"/api/internal/agent/resources/{resource_id}/availability",
-            self.settings.yanyue_internal_key,
+            self.settings.docpilot_base_url,
+            f"/api/internal/agent/documents/{document_id}",
+            self.settings.docpilot_internal_key,
             username,
-            tool_name="query_resource_availability",
-            params={"date": date},
+            tool_name="get_document_diagnostics",
         )
 
-    def my_reservations(self, username: str) -> list[dict[str, Any]]:
-        return self._request(
-            "GET",
-            self.settings.yanyue_base_url,
-            "/api/internal/agent/reservations/mine",
-            self.settings.yanyue_internal_key,
-            username,
-            tool_name="list_my_reservations",
-        )
-
-    def create_reservation(self, username: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def retry_document_parsing(
+        self,
+        username: str,
+        document_id: int,
+        approval_id: str | None,
+        approval_token: str | None,
+    ) -> dict[str, Any]:
         return self._request(
             "POST",
-            self.settings.yanyue_base_url,
-            "/api/internal/agent/reservations",
-            self.settings.yanyue_internal_key,
+            self.settings.docpilot_base_url,
+            f"/api/internal/agent/documents/{document_id}/retry",
+            self.settings.docpilot_internal_key,
             username,
-            tool_name="create_reservation",
-            json=payload,
-            approved=True,
-            retryable=True,  # requestId makes replay safe.
-        )
-
-    def cancel_reservation(self, username: str, reservation_id: int) -> None:
-        self._request(
-            "DELETE",
-            self.settings.yanyue_base_url,
-            f"/api/internal/agent/reservations/{reservation_id}",
-            self.settings.yanyue_internal_key,
-            username,
-            tool_name="cancel_reservation",
-            approved=True,
-            retryable=False,
-        )
-
-    def check_in(self, username: str, reservation_id: int) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            self.settings.yanyue_base_url,
-            f"/api/internal/agent/reservations/{reservation_id}/check-in",
-            self.settings.yanyue_internal_key,
-            username,
-            tool_name="check_in_reservation",
-            approved=True,
+            tool_name="retry_document_parsing",
+            approval_id=approval_id,
+            approval_token=approval_token,
             retryable=False,
         )

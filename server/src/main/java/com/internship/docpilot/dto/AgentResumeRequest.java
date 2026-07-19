@@ -7,6 +7,7 @@ import javax.validation.constraints.Pattern;
 public class AgentResumeRequest {
   @NotNull private Long kbId;
   @NotNull private Long conversationId;
+  @NotBlank private String approvalId;
 
   @NotBlank
   @Pattern(regexp = "approve|reject")
@@ -32,8 +33,15 @@ public class AgentResumeRequest {
     return decision;
   }
 
+  public String getApprovalId() {
+    return approvalId;
+  }
+
+  public void setApprovalId(String approvalId) {
+    this.approvalId = approvalId;
+  }
+
   public void setDecision(String decision) {
     this.decision = decision;
   }
 }
-

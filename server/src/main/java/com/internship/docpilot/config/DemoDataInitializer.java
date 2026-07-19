@@ -2,11 +2,13 @@ package com.internship.docpilot.config;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile({"dev", "demo"})
 public class DemoDataInitializer implements ApplicationRunner {
   private final JdbcTemplate jdbc;
   private final PasswordEncoder encoder;

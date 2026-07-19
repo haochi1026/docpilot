@@ -59,6 +59,12 @@ public class KnowledgeBaseController {
         "indexedChunks", service.rebuildIndex(id, p.getUserId(), p.getRole()));
   }
 
+  @PostMapping("/{id}/embedding-migrate")
+  public Map<String, Integer> migrateEmbedding(
+      @AuthenticationPrincipal UserPrincipal p, @PathVariable Long id) throws Exception {
+    return Collections.singletonMap("indexedChunks", service.migrateEmbedding(id, p.getUserId(), p.getRole()));
+  }
+
   @GetMapping("/{id}/index-status")
   public Map<String, Object> indexStatus(
       @AuthenticationPrincipal UserPrincipal p, @PathVariable Long id) {

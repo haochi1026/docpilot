@@ -31,5 +31,14 @@ class InternalAgentGuardTest {
     InternalAgentGuard guard = new InternalAgentGuard("secret", users);
     assertThrows(BusinessException.class, () -> guard.authenticate("wrong", "student"));
   }
-}
 
+  @Test
+  void rejectsDisabledDatabaseIdentity() {
+    AppUser user = new AppUser();
+    user.setUsername("student");
+    user.setEnabled(false);
+    when(users.find("student")).thenReturn(user);
+    InternalAgentGuard guard = new InternalAgentGuard("secret", users);
+    assertThrows(BusinessException.class, () -> guard.authenticate("secret", "student"));
+  }
+}

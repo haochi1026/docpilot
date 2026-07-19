@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 
 public class DocumentView {
   private Long id, kbId;
-  private String originalName, contentType, status, errorMessage;
+  private String originalName, contentType, status, errorMessage, embeddingStatus, embeddingError;
   private long sizeBytes;
   private LocalDateTime createdAt;
 
@@ -54,6 +54,22 @@ public class DocumentView {
 
   public void setErrorMessage(String v) {
     errorMessage = v;
+  }
+
+  public String getEmbeddingStatus() {
+    return embeddingStatus;
+  }
+
+  public void setEmbeddingStatus(String value) {
+    embeddingStatus = value;
+  }
+
+  public String getEmbeddingError() {
+    return embeddingError;
+  }
+
+  public void setEmbeddingError(String value) {
+    embeddingError = value;
   }
 
   public long getSizeBytes() {

@@ -33,9 +33,6 @@ class Settings:
     ollama_model: str
     docpilot_base_url: str
     docpilot_internal_key: str
-    yanyue_enabled: bool
-    yanyue_base_url: str
-    yanyue_internal_key: str
     checkpoint_backend: str
     checkpoint_path: str
     checkpoint_dsn: str
@@ -50,6 +47,14 @@ class Settings:
     agentops_base_url: str
     agentops_api_key: str
     agentops_timeout_seconds: float
+    checkpoint_retention_days: int = 30
+    checkpoint_cleanup_interval_seconds: int = 21600
+    agentops_governance_enabled: bool = False
+    agentops_identity_token: str = ""
+    agentops_identity_token_secret: str = ""
+    agentops_identity_subject: str = "docpilot-agent"
+    agentops_identity_tenant: str = "default"
+    agentops_identity_role: str = "OPERATOR"
 
     @property
     def production(self) -> bool:
@@ -75,6 +80,16 @@ class Settings:
                 raise ValueError("production mode requires postgres checkpoints")
             if self.agentops_enabled and not self.agentops_api_key:
                 raise ValueError("AGENTOPS_API_KEY is required when AgentOps is enabled")
+            if self.agentops_enabled and not self.agentops_governance_enabled:
+                raise ValueError("production AgentOps integration requires governance to be enabled")
+            if self.agentops_enabled and not (
+                self.agentops_identity_token or self.agentops_identity_token_secret
+            ):
+                raise ValueError(
+                    "production AgentOps integration requires a static identity token or signing secret"
+                )
+        if self.agentops_identity_role not in {"ADMIN", "OPERATOR", "VIEWER"}:
+            raise ValueError("AGENTOPS_IDENTITY_ROLE must be ADMIN, OPERATOR or VIEWER")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -90,13 +105,6 @@ class Settings:
             docpilot_base_url=os.getenv("DOCPILOT_BASE_URL", "http://server:8080"),
             docpilot_internal_key=os.getenv(
                 "DOCPILOT_INTERNAL_KEY", "change-this-agent-internal-key"
-            ),
-            yanyue_enabled=_bool("YANYUE_ENABLED", True),
-            yanyue_base_url=os.getenv(
-                "YANYUE_BASE_URL", "http://host.docker.internal:18080"
-            ),
-            yanyue_internal_key=os.getenv(
-                "YANYUE_INTERNAL_KEY", "change-this-yanyue-agent-key"
             ),
             checkpoint_backend=os.getenv("CHECKPOINT_BACKEND", "sqlite").lower(),
             checkpoint_path=os.getenv(
@@ -115,7 +123,23 @@ class Settings:
                 "AGENTOPS_BASE_URL", "http://host.docker.internal:18100"
             ),
             agentops_api_key=os.getenv("AGENTOPS_API_KEY", ""),
+            agentops_identity_token=os.getenv("AGENTOPS_IDENTITY_TOKEN", ""),
+            agentops_identity_token_secret=os.getenv(
+                "AGENTOPS_IDENTITY_TOKEN_SECRET", ""
+            ),
+            agentops_identity_subject=os.getenv(
+                "AGENTOPS_IDENTITY_SUBJECT", "docpilot-agent"
+            ),
+            agentops_identity_tenant=os.getenv(
+                "AGENTOPS_IDENTITY_TENANT", "default"
+            ),
+            agentops_identity_role=os.getenv(
+                "AGENTOPS_IDENTITY_ROLE", "OPERATOR"
+            ).upper(),
             agentops_timeout_seconds=_float("AGENTOPS_TIMEOUT_SECONDS", 2, 0.1),
+            checkpoint_retention_days=_int("CHECKPOINT_RETENTION_DAYS", 30, 1),
+            checkpoint_cleanup_interval_seconds=_int("CHECKPOINT_CLEANUP_INTERVAL_SECONDS", 21600, 300),
+            agentops_governance_enabled=_bool("AGENTOPS_GOVERNANCE_ENABLED", False),
         )
         settings.validate()
         return settings

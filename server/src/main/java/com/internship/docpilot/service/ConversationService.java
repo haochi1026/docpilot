@@ -19,10 +19,18 @@ public class ConversationService {
   private final ConversationRepository conversations;
   private final KnowledgeBaseService knowledgeBases;
   private final ObjectMapper mapper = new ObjectMapper();
+  private final AgentApprovalService approvals;
+  private final AgentClient agent;
 
-  public ConversationService(ConversationRepository conversations, KnowledgeBaseService knowledgeBases) {
+  public ConversationService(
+      ConversationRepository conversations,
+      KnowledgeBaseService knowledgeBases,
+      AgentApprovalService approvals,
+      AgentClient agent) {
     this.conversations = conversations;
     this.knowledgeBases = knowledgeBases;
+    this.approvals = approvals;
+    this.agent = agent;
   }
 
   public List<Map<String, Object>> list(Long userId, String role, Long kbId) {
@@ -71,7 +79,9 @@ public class ConversationService {
   @Transactional
   public void delete(Long userId, Long conversationId) {
     requireOwned(conversationId, userId);
+    approvals.deleteConversation(conversationId, userId);
     conversations.delete(conversationId, userId);
+    agent.deleteThread(conversationId);
   }
 
   public Long ensure(Long userId, String role, Long kbId, Long conversationId) {
@@ -105,6 +115,12 @@ public class ConversationService {
   public List<Map<String, String>> recentModelMessages(Long conversationId, Long userId, int limit) {
     requireOwned(conversationId, userId);
     return conversations.recentModelMessages(conversationId, limit);
+  }
+
+  public Map<String, Object> requireOwnedView(Long conversationId, Long userId, String role) {
+    Map<String, Object> conversation = requireOwned(conversationId, userId);
+    knowledgeBases.requireRead(number(conversation.get("kb_id")), userId, role);
+    return conversation;
   }
 
   private Map<String, Object> requireOwned(Long id, Long userId) {

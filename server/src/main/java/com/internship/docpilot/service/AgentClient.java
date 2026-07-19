@@ -56,6 +56,8 @@ public class AgentClient {
       Long conversationId,
       String message,
       String decision,
+      String approvalId,
+      String approvalToken,
       List<Map<String, String>> history,
       SseEmitter emitter)
       throws Exception {
@@ -77,7 +79,11 @@ public class AgentClient {
     payload.put("role", role);
     payload.put("kb_id", kbId);
     if (decision == null) payload.put("message", message);
-    else payload.put("decision", decision);
+    else {
+      payload.put("decision", decision);
+      payload.put("approval_id", approvalId);
+      if (approvalToken != null) payload.put("approval_token", approvalToken);
+    }
     payload.put("history", history == null ? new ArrayList<Map<String, String>>() : history);
 
     byte[] body = mapper.writeValueAsBytes(payload);
@@ -108,8 +114,7 @@ public class AgentClient {
           emitter.send(SseEmitter.event().name("sources").data(result.sources));
         } else if ("approval".equals(type)) {
           result.interrupted = true;
-          Object approval = mapper.convertValue(data, Object.class);
-          emitter.send(SseEmitter.event().name("approval").data(approval));
+          result.approval = mapper.convertValue(data, Object.class);
         } else if ("done".equals(type)) {
           result.answer = data == null ? "" : data.path("answer").asText("");
           if ((result.sources == null || result.sources.isEmpty()) && data != null) {
@@ -150,6 +155,7 @@ public class AgentClient {
     private List<SearchHit> sources = new ArrayList<SearchHit>();
     private boolean interrupted;
     private boolean completed;
+    private Object approval;
 
     public String getAnswer() {
       return answer;
@@ -161,6 +167,29 @@ public class AgentClient {
 
     public boolean isInterrupted() {
       return interrupted;
+    }
+
+    public Object getApproval() {
+      return approval;
+    }
+  }
+
+  public void deleteThread(Long conversationId) {
+    if (!enabled || conversationId == null) return;
+    HttpURLConnection connection = null;
+    try {
+      connection =
+          (HttpURLConnection)
+              new URL(trimSlash(baseUrl) + "/v1/agent/threads/docpilot-" + conversationId)
+                  .openConnection();
+      connection.setRequestMethod("DELETE");
+      connection.setConnectTimeout(connectTimeoutMs);
+      connection.setReadTimeout(connectTimeoutMs);
+      connection.setRequestProperty("X-Agent-Service-Key", serviceKey);
+      connection.getResponseCode();
+    } catch (Exception ignored) {
+    } finally {
+      if (connection != null) connection.disconnect();
     }
   }
 }

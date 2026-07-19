@@ -32,5 +32,5 @@ public class InternalAgentGuard {
     }
     return user;
   }
-}
 
+}

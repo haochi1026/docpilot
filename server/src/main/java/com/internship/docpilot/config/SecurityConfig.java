@@ -34,7 +34,11 @@ public class SecurityConfig {
         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
         .and()
         .authorizeRequests()
-        .antMatchers("/api/auth/login", "/api/internal/agent/**", "/actuator/health")
+        .antMatchers(
+            "/api/auth/login",
+            "/api/internal/agent/**",
+            "/actuator/health",
+            "/actuator/prometheus")
         .permitAll()
         .anyRequest()
         .authenticated()

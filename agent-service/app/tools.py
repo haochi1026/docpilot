@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.tools import ToolRuntime, tool
+from langchain_core.tools import ToolException
 
-from .gateway import InternalGateway
+from .gateway import GatewayError, InternalGateway
 
 
 @dataclass
@@ -29,21 +30,26 @@ class AgentContext:
     role: str
     kb_id: int
     thread_id: str
+    approval_id: str | None = None
+    approval_token: str | None = None
     evidence: EvidenceCollector = field(default_factory=EvidenceCollector)
 
 
-def build_tools(gateway: InternalGateway, yanyue_enabled: bool) -> list[Any]:
+def build_tools(gateway: InternalGateway) -> list[Any]:
     @tool
     def search_knowledge_base(
         query: str, runtime: ToolRuntime[AgentContext], top_k: int = 4
     ) -> list[dict[str, Any]]:
         """Search the current authorized DocPilot knowledge base for relevant source chunks."""
         runtime.stream_writer({"status": "正在检索知识库"})
-        hits = gateway.search_knowledge_base(
-            runtime.context.username,
-            runtime.context.kb_id,
-            query.strip(),
-            max(1, min(top_k, 8)),
+        hits = _invoke_gateway(
+            "search_knowledge_base",
+            lambda: gateway.search_knowledge_base(
+                runtime.context.username,
+                runtime.context.kb_id,
+                query.strip(),
+                max(1, min(top_k, 8)),
+            ),
         )
         runtime.context.evidence.add_all(hits)
         return hits
@@ -54,7 +60,10 @@ def build_tools(gateway: InternalGateway, yanyue_enabled: bool) -> list[Any]:
     ) -> dict[str, Any]:
         """Read one cited DocPilot chunk and its document/page metadata after ACL validation."""
         runtime.stream_writer({"status": f"正在核对引用片段 {chunk_id}"})
-        chunk = gateway.get_chunk(runtime.context.username, chunk_id)
+        chunk = _invoke_gateway(
+            "get_chunk_source",
+            lambda: gateway.get_chunk(runtime.context.username, chunk_id),
+        )
         runtime.context.evidence.add_all([chunk])
         return chunk
 
@@ -63,85 +72,78 @@ def build_tools(gateway: InternalGateway, yanyue_enabled: bool) -> list[Any]:
         runtime: ToolRuntime[AgentContext],
     ) -> list[dict[str, Any]]:
         """List DocPilot knowledge bases accessible to the signed-in user."""
-        return gateway.list_knowledge_bases(runtime.context.username)
+        return _invoke_gateway(
+            "list_accessible_knowledge_bases",
+            lambda: gateway.list_knowledge_bases(runtime.context.username),
+        )
 
-    tools: list[Any] = [
+    @tool
+    def list_documents(
+        runtime: ToolRuntime[AgentContext], status: str = ""
+    ) -> list[dict[str, Any]]:
+        """List documents in the current authorized knowledge base, optionally filtered by status."""
+        runtime.stream_writer({"status": "正在检查知识库文档状态"})
+        items = _invoke_gateway(
+            "list_documents",
+            lambda: gateway.list_documents(
+                runtime.context.username, runtime.context.kb_id
+            ),
+        )
+        normalized = status.strip().upper()
+        if normalized:
+            items = [
+                item
+                for item in items
+                if str(item.get("status", "")).upper() == normalized
+            ]
+        return items
+
+    @tool
+    def get_document_diagnostics(
+        document_id: int, runtime: ToolRuntime[AgentContext]
+    ) -> dict[str, Any]:
+        """Inspect one document's parse status, failure reason, version and chunk count after ACL validation."""
+        runtime.stream_writer({"status": f"正在诊断文档 {document_id}"})
+        return _invoke_gateway(
+            "get_document_diagnostics",
+            lambda: gateway.get_document_diagnostics(
+                runtime.context.username, document_id
+            ),
+        )
+
+    @tool
+    def retry_document_parsing(
+        document_id: int, runtime: ToolRuntime[AgentContext]
+    ) -> dict[str, Any]:
+        """Retry a FAILED DocPilot document parse. This state-changing action requires explicit user approval."""
+        runtime.stream_writer({"status": f"正在重新发布文档 {document_id} 的解析任务"})
+        return _invoke_gateway(
+            "retry_document_parsing",
+            lambda: gateway.retry_document_parsing(
+                runtime.context.username,
+                document_id,
+                runtime.context.approval_id,
+                runtime.context.approval_token,
+            ),
+        )
+
+    tools = [
         search_knowledge_base,
         get_chunk_source,
         list_accessible_knowledge_bases,
+        list_documents,
+        get_document_diagnostics,
+        retry_document_parsing,
     ]
-
-    if not yanyue_enabled:
-        return tools
-
-    @tool
-    def list_lab_resources(runtime: ToolRuntime[AgentContext]) -> list[dict[str, Any]]:
-        """List enabled laboratory equipment, rooms, and desks from Yanyue."""
-        return gateway.list_lab_resources(runtime.context.username)
-
-    @tool
-    def query_resource_availability(
-        resource_id: int, date: str, runtime: ToolRuntime[AgentContext]
-    ) -> dict[str, Any]:
-        """Query occupied 30-minute slots for one laboratory resource on an ISO date."""
-        return gateway.resource_availability(runtime.context.username, resource_id, date)
-
-    @tool
-    def list_my_reservations(runtime: ToolRuntime[AgentContext]) -> list[dict[str, Any]]:
-        """List reservations owned by the signed-in user."""
-        return gateway.my_reservations(runtime.context.username)
-
-    @tool
-    def create_reservation(
-        resource_id: int,
-        reserve_date: str,
-        start_slot: int,
-        end_slot: int,
-        purpose: str,
-        runtime: ToolRuntime[AgentContext],
-    ) -> dict[str, Any]:
-        """Create a Yanyue reservation. This write must be explicitly approved by the user."""
-        fingerprint = (
-            f"{runtime.context.thread_id}:{runtime.context.username}:{resource_id}:"
-            f"{reserve_date}:{start_slot}:{end_slot}:{purpose.strip()}"
-        )
-        request_id = "agent-" + hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:32]
-        return gateway.create_reservation(
-            runtime.context.username,
-            {
-                "requestId": request_id,
-                "resourceId": resource_id,
-                "reserveDate": reserve_date,
-                "startSlot": start_slot,
-                "endSlot": end_slot,
-                "purpose": purpose.strip(),
-            },
-        )
-
-    @tool
-    def cancel_reservation(
-        reservation_id: int, runtime: ToolRuntime[AgentContext]
-    ) -> dict[str, Any]:
-        """Cancel the signed-in user's Yanyue reservation after explicit approval."""
-        gateway.cancel_reservation(runtime.context.username, reservation_id)
-        return {"reservationId": reservation_id, "status": "CANCELLED"}
-
-    @tool
-    def check_in_reservation(
-        reservation_id: int, runtime: ToolRuntime[AgentContext]
-    ) -> dict[str, Any]:
-        """Check in to a Yanyue reservation after explicit approval."""
-        return gateway.check_in(runtime.context.username, reservation_id)
-
-    tools.extend(
-        [
-            list_lab_resources,
-            query_resource_availability,
-            list_my_reservations,
-            create_reservation,
-            cancel_reservation,
-            check_in_reservation,
-        ]
-    )
+    for registered_tool in tools:
+        registered_tool.handle_tool_error = True
     return tools
 
+
+def _invoke_gateway(name: str, action: Callable[[], Any]) -> Any:
+    try:
+        return action()
+    except GatewayError as exc:
+        raise ToolException(
+            f"{name} 执行失败：目标不存在、当前用户无权限、状态不允许或下游服务暂不可用"
+        ) from exc

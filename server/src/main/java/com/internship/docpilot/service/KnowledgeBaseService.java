@@ -81,6 +81,12 @@ public class KnowledgeBaseService {
     return embeddings.reindexKnowledgeBase(kbId);
   }
 
+  public int migrateEmbedding(Long kbId, Long userId, String role) throws Exception {
+    requireWrite(kbId, userId, role);
+    if (!embeddings.enabled()) throw new BusinessException(HttpStatus.BAD_REQUEST, "当前未启用Embedding模型");
+    return embeddings.migrateKnowledgeBase(kbId);
+  }
+
   public Map<String, Object> indexStatus(Long kbId, Long userId, String role) {
     requireRead(kbId, userId, role);
     int chunks = embeddings.countChunks(kbId);
@@ -90,7 +96,10 @@ public class KnowledgeBaseService {
     result.put("model", embeddings.enabled() ? embeddings.getModel() : "未启用向量检索");
     result.put("totalChunks", chunks);
     result.put("indexedChunks", indexed);
-    result.put("complete", embeddings.enabled() && chunks > 0 && chunks == indexed);
+    boolean complete = embeddings.enabled() && chunks > 0 && chunks == indexed;
+    result.put("missingChunks", Math.max(0, chunks - indexed));
+    result.put("state", !embeddings.enabled() ? "DISABLED" : chunks == 0 ? "EMPTY" : complete ? "READY" : "REBUILD_REQUIRED");
+    result.put("complete", complete);
     return result;
   }
 }

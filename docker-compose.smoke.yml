@@ -1,0 +1,83 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: smoke-mysql-password
+      MYSQL_DATABASE: docpilot
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-ft-min-token-size=1
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -psmoke-mysql-password"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  redis:
+    image: redis:7.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: smoke-minio-user
+      MINIO_ROOT_PASSWORD: smoke-minio-password
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  vector-postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: docpilot_vector
+      POSTGRES_USER: docpilot_vector
+      POSTGRES_PASSWORD: smoke-vector-password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docpilot_vector -d docpilot_vector"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  server:
+    build: ./server
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/docpilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      DB_USERNAME: root
+      DB_PASSWORD: smoke-mysql-password
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: smoke-minio-user
+      MINIO_SECRET_KEY: smoke-minio-password
+      JWT_SECRET: smoke-only-jwt-secret-with-more-than-thirty-two-bytes
+      VECTOR_STORE_ENABLED: "true"
+      VECTOR_DB_URL: jdbc:postgresql://vector-postgres:5432/docpilot_vector
+      VECTOR_DB_USERNAME: docpilot_vector
+      VECTOR_DB_PASSWORD: smoke-vector-password
+      AI_MODE: local
+      EMBEDDING_MODE: local
+      OCR_ENABLED: "true"
+      OCR_MIN_CONFIDENCE: "45"
+      DOCUMENT_REVISION_RETENTION_COUNT: "3"
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+      vector-postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+

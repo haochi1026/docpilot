@@ -22,6 +22,8 @@ class Metrics:
             "# TYPE docpilot_agent_events_total counter",
             "# HELP docpilot_agent_gateway_requests_total Count of deterministic tool gateway calls.",
             "# TYPE docpilot_agent_gateway_requests_total counter",
+            "# HELP docpilot_agent_trace_exports_total Count of AgentOps trace export attempts.",
+            "# TYPE docpilot_agent_trace_exports_total counter",
         ]
         with self._lock:
             items = sorted(self._counters.items())

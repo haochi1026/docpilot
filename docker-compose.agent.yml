@@ -22,9 +22,6 @@ services:
       OLLAMA_MODEL: ${AGENT_MODEL:-qwen3.5:2b}
       DOCPILOT_BASE_URL: http://server:8080
       DOCPILOT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
-      YANYUE_ENABLED: ${YANYUE_ENABLED:-true}
-      YANYUE_BASE_URL: ${YANYUE_BASE_URL:-http://host.docker.internal:18080}
-      YANYUE_INTERNAL_KEY: ${YANYUE_AGENT_KEY:-yanyue-agent-local-key-change-me}
       CHECKPOINT_BACKEND: ${CHECKPOINT_BACKEND:-postgres}
       CHECKPOINT_PATH: /data/checkpoints.sqlite
       CHECKPOINT_DSN: postgresql://${AGENT_POSTGRES_USER:-docpilot_agent}:${AGENT_POSTGRES_PASSWORD:-docpilot-agent-local-password}@agent-postgres:5432/${AGENT_POSTGRES_DB:-docpilot_agent}?sslmode=disable
@@ -32,9 +29,19 @@ services:
       AGENT_TOOL_RUN_LIMIT: ${AGENT_TOOL_RUN_LIMIT:-12}
       TOOL_MAX_RETRIES: ${TOOL_MAX_RETRIES:-2}
       TOOL_CIRCUIT_FAILURES: ${TOOL_CIRCUIT_FAILURES:-5}
-      AGENTOPS_ENABLED: ${AGENTOPS_ENABLED:-false}
+      AGENTOPS_ENABLED: ${AGENTOPS_ENABLED:-true}
       AGENTOPS_BASE_URL: ${AGENTOPS_BASE_URL:-http://host.docker.internal:18100}
-      AGENTOPS_API_KEY: ${AGENTOPS_API_KEY:-}
+      AGENTOPS_API_KEY: ${AGENTOPS_API_KEY:-agentops-local-key}
+      AGENTOPS_IDENTITY_TOKEN: ${AGENTOPS_IDENTITY_TOKEN:-}
+      AGENTOPS_IDENTITY_TOKEN_SECRET: ${AGENTOPS_IDENTITY_TOKEN_SECRET:-}
+      AGENTOPS_IDENTITY_SUBJECT: ${AGENTOPS_IDENTITY_SUBJECT:-docpilot-agent}
+      AGENTOPS_IDENTITY_TENANT: ${AGENTOPS_IDENTITY_TENANT:-default}
+      AGENTOPS_IDENTITY_ROLE: ${AGENTOPS_IDENTITY_ROLE:-OPERATOR}
+      AGENTOPS_GOVERNANCE_ENABLED: ${AGENTOPS_GOVERNANCE_ENABLED:-false}
+      CHECKPOINT_RETENTION_DAYS: ${CHECKPOINT_RETENTION_DAYS:-30}
+      CHECKPOINT_CLEANUP_INTERVAL_SECONDS: ${CHECKPOINT_CLEANUP_INTERVAL_SECONDS:-21600}
+      OTEL_SERVICE_NAME: ${AGENT_OTEL_SERVICE_NAME:-docpilot-agent}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       TZ: Asia/Shanghai
     volumes:
       - docpilot_agent_state:/data
@@ -55,6 +62,8 @@ services:
       AGENT_BASE_URL: http://agent-service:8090
       AGENT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
       AGENT_SERVICE_KEY: ${AGENT_SERVICE_KEY:-docpilot-agent-service-local-key}
+      AGENT_APPROVAL_SECRET: ${AGENT_APPROVAL_SECRET:-docpilot-agent-approval-local-key}
+      AGENT_APPROVAL_TTL_MINUTES: ${AGENT_APPROVAL_TTL_MINUTES:-15}
       AGENT_FALLBACK_TO_RAG: "true"
     depends_on:
       agent-service:

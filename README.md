@@ -2,7 +2,7 @@
 
 > 文档 RAG / LangChain-LangGraph Agent / 工具调用 / 人工审批 / 固定 RAG 降级
 
-DocPilot 是一个面向课题组和部门内部资料的私有化知识库 Agent 平台，覆盖知识空间、文档上传、异步解析、成员授权、混合检索、引用追溯、工具调用和人工审批。系统保留原 Spring Boot 固定 RAG 链路，并新增独立 FastAPI Agent 服务，使模型能够在权限范围内选择知识库与研约工具。
+DocPilot 是一个面向课题组和部门内部资料的私有化知识库 Agent 平台，覆盖知识空间、文档上传、异步解析、成员授权、混合检索、引用追溯、工具调用和人工审批。系统保留原 Spring Boot 固定 RAG 链路，并新增独立 FastAPI Agent 服务，使模型能够在权限范围内自主选择知识库检索、文档诊断与恢复工具。
 
 项目重点处理文档问答系统中的四类工程问题：文件解析属于耗时任务，不能长期占用上传接口；检索必须在权限边界内完成，不能先泄露片段再过滤；本地模型吞吐有限，需要限流和并发隔离；Embedding 或回答模型不可用时，系统仍应保留可运行的本地检索路径。
 
@@ -57,18 +57,21 @@ DocPilot 是一个面向课题组和部门内部资料的私有化知识库 Agen
 - Outbox 投递器每 2 秒领取任务，支持本地线程池和 RocketMQ 两种发布适配器；失败任务最多重试 5 次，并按指数退避延后执行。
 - 解析消费者通过 `PENDING/FAILED → PROCESSING` 条件更新领取文档，重复消息无法再次处理已经完成的任务。
 
-### 3. 文本抽取、切片与向量索引
+### 3. 文本抽取、语义切片与向量索引
 
-- Apache Tika 统一抽取多种格式文本；扫描版 PDF 没有文本层时给出明确提示。
-- 文本按约 700 字符切片，并保留 100 字符重叠，降低段落边界截断造成的信息损失。
-- 启用 Embedding 后自动为新文档生成向量；已有文档可以直接重建索引，无需删除或重新上传。
-- 向量记录保存模型名称，切换 Embedding 模型后旧向量不会参与新模型检索，避免不同维度向量混用。
+- PDF 使用 PDFBox 逐页抽取并保留真实页码；文本过少的页面自动以 200 DPI 渲染，再调用 Tesseract `chi_sim+eng` OCR。Word、PPT、Excel、TXT 和 Markdown 等格式仍由 Apache Tika 统一抽取。
+- 切片器先识别标题、段落和句子边界，再按默认 480 Token 预算组块并保留约 60 Token 重叠；PDF 切片禁止跨页，避免引用页码失真。这里使用轻量 Token 估算器控制预算，不声称与任一模型分词器逐 Token 完全一致。
+- MySQL 保存正文切片、标题、页码、Token 数与词项倒排索引；向量写入独立 PostgreSQL + pgvector，并通过 HNSW 余弦索引召回，不再逐行解析 MySQL JSON。
+- 文档分别记录正文解析状态与 Embedding 状态。向量生成不完整时删除该文档的残缺向量并标记 `PARTIAL/FAILED`，文本与 BM25 仍可使用；完整重建期间使用 `REINDEXING`，不会把失败误报为 `SUCCESS`。
+- 每次重新解析先写入新的文档修订和影子向量集，只有文本、词法索引与向量集完整后才原子发布 `active_revision`；失败修订保留诊断信息，上一版正文继续可检索。默认保留最近 3 个修订，清理任务永不删除活动版或处理中修订。
+- 向量记录绑定模型名称与固定维度；切换 Embedding 模型后旧模型向量不会参与新查询。
 
-### 4. 关键词检索与混合召回
+### 4. 全库 BM25、pgvector 与有阈值混合召回
 
-默认模式使用字符和二元词片相关度完成本地召回，不依赖外部模型。启用向量模式后，使用“75% 余弦相似度 + 25% 词片相关度”进行混合排序，并选取 TopK 片段作为回答上下文。
-
-当 Embedding 服务临时不可用时，检索层记录异常并回退关键词召回；每条命中结果保留文档名、原始片段和相关度，用于前端引用核验。
+- 中文二元词项和英文单词在入库时写入倒排表；BM25 的文档频率、平均长度和候选统计基于当前知识库全部可用切片，不再只统计“前 500 条候选”。历史切片由启动回填任务补齐词项与 Token 数。
+- 向量通道使用 pgvector HNSW 召回，词法与向量得分默认按 `0.35 / 0.65` 融合；Embedding 服务不可用时自动退回全库 BM25。
+- 排序后先执行相关性门禁，再截取 TopK：默认总分阈值 `0.20`、词法通道阈值 `0.05`、纯向量通道阈值 `0.45`。候选必须至少通过一个通道门槛和总分门槛，因此小语料库中的“最近但仍不相关”向量不会被强制返回。
+- 无合格片段时检索返回空数组，Agent 输出明确的证据不足答复；有命中时保留文档、修订号、切片、PDF 页码和得分，回答中的 `[n]` 只能引用实际返回来源。
 
 ### 5. 运行时模型切换
 
@@ -113,12 +116,12 @@ flowchart TB
   U7 -->|消息队列| U9["RocketMQ"]
   U8 --> U10["条件更新领取<br/>文档解析任务"]
   U9 --> U10
-  U10 --> U11["Apache Tika<br/>抽取文档文本"]
-  U11 --> U12["按 700 字符切片<br/>保留 100 字符重叠"]
-  U12 --> U13["MySQL 保存<br/>文档片段"]
+  U10 --> U11["PDFBox 逐页 / Tika<br/>必要时 Tesseract OCR"]
+  U11 --> U12["标题与段落感知切片<br/>Token 预算和重叠"]
+  U12 --> U13["MySQL 保存片段与<br/>全库 BM25 词项"]
   U13 --> U14{"是否启用<br/>Embedding"}
-  U14 -->|是| U15["生成向量并保存<br/>对应模型名称"]
-  U14 -->|否| U16["使用关键词<br/>检索模式"]
+  U14 -->|是| U15["向量写入 pgvector<br/>HNSW 索引"]
+  U14 -->|否或失败| U16["保留 BM25 可用<br/>标记准确索引状态"]
 
   U16 -.-> Q0["二、检索问答链路"]:::section
   U15 -.-> Q0
@@ -126,7 +129,7 @@ flowchart TB
   Q1 --> Q2["先校验 READ / MANAGE<br/>再进入检索"]
   Q2 --> Q3["Redis Lua<br/>用户级限流"]
   Q3 --> Q4["Redisson 信号量<br/>限制推理并发"]
-  Q4 --> Q5["关键词或向量混合检索<br/>召回 TopK 片段"]
+  Q4 --> Q5["BM25 + pgvector 混合检索<br/>通道阈值过滤后取 TopK"]
   Q5 --> Q6{"回答模式"}
   Q6 -->|本地| Q7["本地抽取式回答"]
   Q6 -->|模型| Q8["Ollama / OpenAI<br/>兼容模型"]
@@ -143,10 +146,10 @@ flowchart TB
 | 层级 | 技术 |
 | --- | --- |
 | 后端 | Java 8、Spring Boot 2.7、Spring Security、Spring JDBC |
-| 数据与缓存 | MySQL 8.0、Redis 7.2、Redisson 3.23 |
-| 文档处理 | MinIO、Apache Tika 2.9 |
+| 数据与缓存 | MySQL 8.0、PostgreSQL 17 + pgvector、Redis 7.2、Redisson 3.23 |
+| 文档处理 | MinIO、Apache Tika 2.9、PDFBox、Tesseract OCR |
 | 异步任务 | 本地消息表、受控线程池、可选 RocketMQ 4.9 |
-| 模型与检索 | Ollama/OpenAI 兼容接口、混合检索、SSE |
+| 模型与检索 | Ollama/OpenAI 兼容接口、全库 BM25、pgvector HNSW、SSE |
 | Agent 编排 | Python 3.12、FastAPI、LangChain、LangGraph、ChatOllama |
 | 前端 | Vue 3、Vite、Fetch ReadableStream |
 | 部署 | Docker、Docker Compose、Nginx |
@@ -172,6 +175,7 @@ docpilot/
 ├─ docs/STARTUP.md                 启动与排错手册
 ├─ docs/api.http                   接口调试示例
 ├─ docker-compose.yml              默认编排
+├─ docker-compose.smoke.yml        全新数据库迁移与启动冒烟验收
 ├─ docker-compose.agent.yml        Agent 服务增量配置
 ├─ docker-compose.rocketmq.yml     RocketMQ 增量配置
 ├─ docker-compose.ai.yml           Ollama 增量配置
@@ -190,8 +194,10 @@ docpilot/
 | JDK | 8 或更高 | 容器构建使用 JDK 17，源码兼容 Java 8 |
 | Node.js | 20 | Vue 前端构建 |
 | MySQL | 8.0 | 元数据、切片、ACL、Outbox、模型配置 |
+| PostgreSQL + pgvector | 17 | 向量存储与 HNSW 近邻索引 |
 | Redis | 7.2 | 限流与分布式推理许可证 |
 | MinIO | 2024-11 | 原始文档对象存储 |
+| Tesseract | 5.x | 扫描 PDF 的中英文 OCR；Compose 镜像已内置 |
 | Docker Desktop | 当前稳定版 | 推荐的完整启动方式 |
 | Ollama | 当前稳定版 | 可选，本地模型增强模式使用 |
 
@@ -227,6 +233,13 @@ cd docpilot
 
 完整启动步骤和常见问题见 [docs/STARTUP.md](docs/STARTUP.md)。
 
+提交前可使用隔离的 tmpfs 数据库执行一次完整迁移与启动冒烟，不会复用或修改本地演示数据：
+
+```powershell
+docker compose -p docpilot-smoke -f docker-compose.smoke.yml up -d --build --wait --wait-timeout 240
+docker compose -p docpilot-smoke -f docker-compose.smoke.yml down --remove-orphans
+```
+
 ## 开源与部署安全
 
 - 仓库只提交 `.env.example`；本地 `.env`、备份、上传文件、私钥和 IDE 配置已通过 `.gitignore` 排除。
@@ -248,19 +261,17 @@ cd docpilot
 Agent 模式是可选的 Compose 覆盖层，原有固定 RAG 路径仍可独立运行，并在 Agent 服务异常时作为降级路径。
 
 ```powershell
-# 先启动研约，使业务工具可用；两个项目的 YANYUE_AGENT_KEY 必须一致
-cd yanyue
-docker compose up -d --build
-
-cd ..\docpilot
 docker compose -f docker-compose.yml -f docker-compose.agent.yml up -d --build
 ```
 
-Agent 服务使用 LangChain `create_agent` 和 ChatOllama，将知识库检索、片段溯源、可访问知识库、
-实验室资源查询和预约操作封装为工具；LangGraph checkpoint 以对话 ID 维持状态，开发环境可用 SQLite，
-生产化 Compose 默认使用 PostgreSQL。预约、取消、
-签到由 `HumanInTheLoopMiddleware` 在工具执行前中断，前端批准或拒绝后才使用相同 `thread_id`
-恢复执行。Java 内部网关仍负责用户映射、ACL、事务、唯一约束和幂等，模型无权绕开这些校验。
+Agent 服务使用 LangChain 工具与 ChatOllama，并以显式 LangGraph 组织两条主路径：知识问答执行
+`route_intent → plan_required_retrieval → execute_tools → verify_result → call_model → guard_answer`；
+文档运维执行 `route_intent → plan_document_operation → execute_tools → advance_document_operation → policy_gate`。
+知识型问题会被确定性规划为先检索，模型不能跳过证据获取；无证据直接拒答，缺失引用可在不新增事实、且引用序号不越界的前提下做一次修复。若模型回答仍夹带未引用结论，系统只在问题与来源原句达到严格词面匹配阈值时返回一条逐字抽取并带引用的原句，否则继续安全拒答。文档恢复则固定执行“诊断状态 → 校验 FAILED/PARTIAL → 生成写动作 → HITL”，不把关键状态迁移交给模型猜测。
+LangGraph checkpoint 以对话 ID 维持状态，开发环境可用 SQLite，Compose 默认使用 PostgreSQL。
+`retry_document_parsing` 在 `policy_gate` 中断；待审批动作同时写入 Java 业务库，容器重启后仍可查询并以相同 `thread_id` 恢复。
+Java 内部网关仍负责用户映射、ACL、`FAILED → PENDING` 条件更新、Outbox 入队和重复任务防护，
+模型无权绕开这些校验。
 
 Agent 服务就绪检查：<http://localhost:18090/health/ready>；指标：<http://localhost:18090/metrics>。
 
@@ -270,34 +281,39 @@ Agent 服务就绪检查：<http://localhost:18090/health/ready>；指标：<htt
 | --- | --- |
 | Vue 前端 | 展示模型 Token、工具状态、引用来源和待审批动作 |
 | Spring Boot | 统一 JWT 入口、会话落库、知识库 ACL、Agent 事件转发和固定 RAG 降级 |
-| FastAPI Agent | 使用 `create_agent` 组织模型、Prompt、工具、运行上下文和中间件 |
-| LangGraph | 按 `thread_id` 保存 checkpoint，支持中断、恢复与多步骤状态管理 |
-| DocPilot/研约工具网关 | 执行真实查询和写操作，继续承担权限、事务、唯一约束与幂等 |
+| FastAPI Agent | 执行意图路由、检索计划、模型调用、工具策略、结果验证与引用守卫 |
+| LangGraph | 显式状态图；按用户和 `thread_id` 保存 checkpoint，支持中断、恢复与多步骤状态管理 |
+| DocPilot 文档工具网关 | 执行检索、状态诊断和重解析写操作，继续承担权限、事务、条件更新与 Outbox 幂等 |
 
 ### 已注册工具
 
 | 工具类型 | 工具 | 执行规则 |
 | --- | --- | --- |
 | 知识库 | `search_knowledge_base`、`get_chunk_source`、`list_accessible_knowledge_bases` | 检索前由 Java 侧执行 ACL 校验 |
-| 研约只读 | `list_lab_resources`、`query_resource_availability`、`list_my_reservations` | 可直接执行，不产生业务副作用 |
-| 研约写入 | `create_reservation`、`cancel_reservation`、`check_in_reservation` | 先触发 HITL，批准后才调用研约 |
+| 文档诊断 | `list_documents`、`get_document_diagnostics` | 读取文档状态、失败原因、版本和切片数，不产生业务副作用 |
+| 文档恢复 | `retry_document_parsing` | 仅允许管理者重试 `FAILED` 文档；先触发 HITL，批准后再条件更新并写入 Outbox |
 
 ### 状态、审批与流式事件
 
 - Java 将 `conversationId` 映射为稳定 `thread_id`；本地可使用 SQLite checkpoint，Compose 默认使用 PostgreSQL checkpoint，使中断审批状态可跨 Agent 容器重启恢复。
 - `ToolRuntime` 上下文携带 `username`、`user_id`、`role`、`kb_id` 和 `thread_id`；这些字段不作为可由模型填写的普通工具参数暴露。
-- 写工具由 `HumanInTheLoopMiddleware` 暂停，前端批准或拒绝后通过相同 `thread_id` 恢复；研约网关还会再次检查 `X-Agent-Approval`。
+- 写工具由 `policy_gate` 暂停；Java 将审批 ID、用户、会话、知识库、线程、工具、资源、参数快照和过期时间持久化。批准令牌使用 HMAC 绑定动作且仅可消费一次，最终写入仍再次校验 ACL、文档状态并与 Outbox 事务提交。
 - Python 以 NDJSON 输出 `status`、`token`、`replace`、`sources`、`approval`、`done` 与 `error` 事件，Java 再转换成浏览器原有 SSE 协议。
 - 普通问答在 Agent 连接失败、超时或执行异常时回退固定 RAG；审批恢复依赖 checkpoint，不进行无状态重放。
 - Java 调用 Agent 服务时使用独立服务密钥；单次运行限制模型与工具调用次数，防止循环失控。
-- 内部工具网关对安全读取和带 `requestId` 的幂等写入执行指数退避重试，并以连续失败熔断保护下游服务。
-- 可选接入 AgentOps Hub 上报 Trace/Tool Span；`/v1/agent/evaluate` 提供回归评测所需的结构化结果，观测平台异常不会阻断业务回答。
+- 内部工具网关对安全读取执行指数退避重试，并以连续失败熔断保护下游服务；重解析写操作不做网络层自动重放，由 Java `FAILED → PENDING` 条件更新防止重复领取。
+- 可选接入 AgentOps Hub 上报 Trace、模型 Span 与工具 Span；流式响应通过请求级 `ContextVar` 上下文推进 LangGraph，避免跨线程/分段 `yield` 后丢失 Span，也不会用全局状态串扰并发请求。生产模式使用与 AgentOps `IDENTITY_TOKEN_SECRET` 对应的 `AGENTOPS_IDENTITY_TOKEN_SECRET`，为每次请求生成 5 分钟服务身份令牌，避免把会过期的静态令牌长期写入环境变量。`/v1/agent/evaluate` 提供回归评测所需的结构化结果，观测平台异常不会阻断业务回答。
 
-## 当前边界
+## 验收口径与当前边界
 
-- Apache Tika 不提供 OCR，纯扫描 PDF 需要预先识别或额外接入 OCR 服务。
-- 当前向量存储采用 MySQL JSON 文本，适合项目演示和小规模知识库；更大数据量可迁移到 pgvector、Milvus 或 Elasticsearch。
-- Outbox 采用数据库轮询，每次领取一条消息；大规模任务下需要批量领取、分区或专用 CDC 方案。
+- **检索正确性**：相关问题必须返回可核验来源；全不相关问题必须零召回并安全拒答；PDF 来源必须带真实页码，扫描页必须经过 OCR 后才可索引。
+- **索引一致性**：正文抽取、词法索引和向量索引状态分别可见；Embedding 失败不得标记完整成功，也不得留下可搜索的半套向量。
+- **Agent 可恢复性**：写操作必须先中断并持久化审批，重启后仍可恢复；令牌必须绑定用户、线程、工具和参数且只能消费一次。
+- **评测闭环**：每次 Agent 运行上报 Trace/Span；AgentOps 使用 48 条版本化用例、重复运行、确定性多维评分与可选语义 Judge 做回归，失败证据可由 EvalOps 诊断并经 HITL 加入回归集或发起新评测。
+
+- 当前 Token 预算使用轻量估算器，不是特定模型的精确 tokenizer；需要严格上下文计费时可替换成与部署模型一致的 tokenizer。
+- Tesseract 适合中英文印刷体扫描件；复杂表格、手写体和低清图片仍需要版面分析/OCR 服务与人工抽样复核。
+- Outbox 采用数据库轮询，每批最多领取 32 条并逐条条件更新抢占；大规模任务下仍需要分区、按库限流或专用 CDC 方案。
 - 默认演示账号、数据库密码和 MinIO 密钥不能直接用于公网环境。
 - 项目未进行正式生产压测，因此不声明 QPS、P95 或错误率指标。
 - `qwen3.5:2b` 适合本机链路验证，但小模型的工具选择稳定性有限；面试演示前应使用测试集验证工具选择、参数正确率、引用命中率和写操作审批覆盖率。

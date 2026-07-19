@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test Spring Boot service
+        run: docker build -t docpilot-server ./server
+      - name: Smoke-test Flyway and service startup on fresh databases
+        run: docker compose -p docpilot-ci -f docker-compose.smoke.yml up -d --build --wait --wait-timeout 240
+      - name: Verify latest MySQL migration
+        run: |
+          docker compose -p docpilot-ci -f docker-compose.smoke.yml exec -T mysql \
+            mysql -uroot -psmoke-mysql-password -Nse \
+            "SELECT version,success FROM docpilot.flyway_schema_history ORDER BY installed_rank"
+      - name: Tear down smoke stack
+        if: always()
+        run: docker compose -p docpilot-ci -f docker-compose.smoke.yml down --remove-orphans
+
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test LangGraph Agent in locked runtime
+        run: docker build --target test -t docpilot-agent-test ./agent-service
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+      - name: Build Vue client from lockfile
+        working-directory: client
+        run: pnpm install --frozen-lockfile && pnpm build
+
+  scan:
+    runs-on: ubuntu-latest
+    needs: [server, agent]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t docpilot-server ./server
+      - run: docker build -t docpilot-agent ./agent-service
+      - run: docker build -t docpilot-client ./client
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: docpilot-server
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: docpilot-agent
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: docpilot-client
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

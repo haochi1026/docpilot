@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import asyncio
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from .agent_runtime import AgentRuntime
@@ -24,8 +25,26 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
-        yield
-        resolved_runtime.close()
+        stop = asyncio.Event()
+
+        async def cleanup_loop() -> None:
+            while not stop.is_set():
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=resolved_settings.checkpoint_cleanup_interval_seconds)
+                except asyncio.TimeoutError:
+                    await asyncio.to_thread(
+                        resolved_runtime.checkpoints.cleanup,
+                        resolved_settings.checkpoint_retention_days,
+                    )
+
+        cleanup_task = asyncio.create_task(cleanup_loop())
+        try:
+            yield
+        finally:
+            stop.set()
+            cleanup_task.cancel()
+            await asyncio.gather(cleanup_task, return_exceptions=True)
+            resolved_runtime.close()
 
     application = FastAPI(
         title="DocPilot Agent Service",
@@ -76,6 +95,20 @@ def create_app(
     )
     def evaluate(request: AgentChatRequest) -> AgentEvaluationResponse:
         return application.state.runtime.evaluate(request)
+
+    @application.delete(
+        "/v1/agent/threads/{thread_id}",
+        dependencies=[Depends(guard)],
+        status_code=204,
+    )
+    def delete_thread(thread_id: str) -> None:
+        application.state.runtime.delete_thread(thread_id)
+
+    @application.post("/v1/admin/checkpoints/cleanup")
+    def cleanup_checkpoints(x_agent_key: str = Header(default="")) -> dict[str, int]:
+        if x_agent_key != resolved_settings.agent_service_key:
+            raise HTTPException(status_code=401, detail="invalid agent credential")
+        return {"deleted": application.state.runtime.checkpoints.cleanup(resolved_settings.checkpoint_retention_days)}
 
     return application
 

@@ -19,16 +19,22 @@ public class InferenceGuard {
   private final StringRedisTemplate redis;
   private final RPermitExpirableSemaphore distributed;
   private final int limit;
+  private final long leaseSeconds;
+  private final boolean localFallback;
   private final Semaphore local;
 
   public InferenceGuard(
       StringRedisTemplate redis,
       RedissonClient redisson,
       @Value("${app.inference.max-concurrency:3}") int max,
-      @Value("${app.inference.per-user-per-minute:12}") int limit) {
+      @Value("${app.inference.per-user-per-minute:12}") int limit,
+      @Value("${app.inference.lease-seconds:240}") long leaseSeconds,
+      @Value("${app.inference.local-fallback:true}") boolean localFallback) {
     this.redis = redis;
     this.limit = limit;
     this.local = new Semaphore(max);
+    this.leaseSeconds = Math.max(180, leaseSeconds);
+    this.localFallback = localFallback;
     this.distributed = redisson.getPermitExpirableSemaphore("docpilot:inference:permits");
     try {
       this.distributed.trySetPermits(max);
@@ -39,13 +45,13 @@ public class InferenceGuard {
   public Permit acquire(Long userId) {
     checkRate(userId);
     try {
-      String id = distributed.tryAcquire(0, 120, TimeUnit.SECONDS);
+      String id = distributed.tryAcquire(0, leaseSeconds, TimeUnit.SECONDS);
       if (id == null) throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "推理服务繁忙，请稍后重试");
       return new Permit(id, false);
     } catch (BusinessException e) {
       throw e;
     } catch (Exception e) {
-      if (!local.tryAcquire())
+      if (!localFallback || !local.tryAcquire())
         throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "推理服务繁忙，请稍后重试");
       return new Permit(null, true);
     }

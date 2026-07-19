@@ -248,6 +248,14 @@ async function selectConversation(conversation, navigate = true) {
   try {
     messages.value = await api(`/api/conversations/${conversation.id}/messages`)
     currentConversationId.value = conversation.id
+    const approval = await api(`/api/chat/approvals/pending?conversationId=${conversation.id}`).catch(() => ({}))
+    if (approval?.approvalId) {
+      const answer = {
+        role: 'assistant', content: '', sources: [], status: '等待你确认操作', approval
+      }
+      messages.value.push(answer)
+      pendingApproval.value = answer
+    } else pendingApproval.value = null
     if (navigate) activeView.value = 'chat'
   } catch (e) { flash(e.message, true) }
   finally { conversationBusy.value = false }
@@ -299,7 +307,8 @@ async function openConversationFromOverview(item) {
 }
 
 function approvalActions(payload) {
-  const interrupts = Array.isArray(payload) ? payload : [payload]
+  const raw = payload?.interrupts ?? payload
+  const interrupts = Array.isArray(raw) ? raw : [raw]
   return interrupts.flatMap(item => item?.action_requests || item?.actionRequests || [])
 }
 
@@ -356,6 +365,7 @@ async function reviewAgent(answer, decision) {
       body: JSON.stringify({
         kbId: currentKb.value.id,
         conversationId: currentConversationId.value,
+        approvalId: answer.approval.approvalId,
         decision
       })
     })
@@ -480,7 +490,7 @@ onBeforeUnmount(() => clearInterval(poller))
             <div class="conversation">
               <div v-if="conversationBusy" class="conversation-loading">正在读取历史消息…</div>
               <div v-else-if="!messages.length" class="welcome"><div>✦</div><h2>从 {{ readyCount }} 篇就绪文档中提问</h2><p>每个对话独立保存问题、回答和引用来源。</p><div><button @click="question='请概括知识库中的核心内容'">概括核心内容</button><button @click="question='有哪些需要特别注意的规定？'">查找注意事项</button><button @click="question='请列出关键流程和时间要求'">整理关键流程</button></div></div>
-              <div v-for="(message,index) in messages" :key="message.id || index" class="message" :class="message.role"><div class="avatar">{{ message.role==='user'?'我':'DP' }}</div><div class="bubble"><p>{{ message.content }}<span v-if="message.status" class="typing">{{ message.status }}</span></p><div v-if="message.approval" class="agent-approval"><b>Agent 请求执行以下写操作</b><div v-for="(action,actionIndex) in approvalActions(message.approval)" :key="actionIndex" class="approval-action"><strong>{{ action.name }}</strong><code>{{ JSON.stringify(action.arguments) }}</code></div><div class="approval-buttons"><button :disabled="asking" @click="reviewAgent(message,'reject')">拒绝</button><button :disabled="asking" class="approve" @click="reviewAgent(message,'approve')">批准并继续</button></div></div><details v-if="message.sources?.length"><summary>{{ message.sources.length }} 条引用来源</summary><div v-for="(source,sourceIndex) in message.sources" :key="sourceIndex" class="source"><div><b>[{{ sourceIndex+1 }}] {{ source.documentName }}</b><em>相关度 {{ Math.round(source.score*100) }}%</em></div><span>{{ source.content.slice(0,220) }}{{source.content.length>220?'…':''}}</span></div></details></div></div>
+              <div v-for="(message,index) in messages" :key="message.id || index" class="message" :class="message.role"><div class="avatar">{{ message.role==='user'?'我':'DP' }}</div><div class="bubble"><p>{{ message.content }}<span v-if="message.status" class="typing">{{ message.status }}</span></p><div v-if="message.approval" class="agent-approval"><b>Agent 请求执行以下写操作</b><div v-for="(action,actionIndex) in approvalActions(message.approval)" :key="actionIndex" class="approval-action"><strong>{{ action.name }}</strong><code>{{ JSON.stringify(action.args ?? action.arguments ?? {}) }}</code></div><div class="approval-buttons"><button :disabled="asking" @click="reviewAgent(message,'reject')">拒绝</button><button :disabled="asking" class="approve" @click="reviewAgent(message,'approve')">批准并继续</button></div></div><details v-if="message.sources?.length"><summary>{{ message.sources.length }} 条引用来源</summary><div v-for="(source,sourceIndex) in message.sources" :key="sourceIndex" class="source"><div><b>[{{ sourceIndex+1 }}] {{ source.documentName }}<template v-if="source.pageNo"> · 第 {{ source.pageNo }} 页</template></b><em>相关度 {{ Math.round(source.score*100) }}%</em></div><span>{{ source.content.slice(0,220) }}{{source.content.length>220?'…':''}}</span></div></details></div></div>
             </div>
             <form class="ask" @submit.prevent="ask"><textarea v-model="question" rows="2" placeholder="基于当前知识库提问，Ctrl + Enter 发送" @keydown.ctrl.enter="ask"></textarea><button :disabled="asking||conversationBusy||!readyCount">{{ asking?'生成中':'发送' }}</button></form>
           </div>

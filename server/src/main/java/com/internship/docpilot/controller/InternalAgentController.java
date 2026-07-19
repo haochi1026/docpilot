@@ -1,6 +1,7 @@
 package com.internship.docpilot.controller;
 
 import com.internship.docpilot.dto.AgentSearchRequest;
+import com.internship.docpilot.model.DocumentView;
 import com.internship.docpilot.model.KnowledgeBase;
 import com.internship.docpilot.model.SearchHit;
 import com.internship.docpilot.service.AgentToolService;
@@ -46,5 +47,30 @@ public class InternalAgentController {
       @PathVariable Long id) {
     return tools.chunk(key, username, id);
   }
-}
 
+  @GetMapping("/knowledge-bases/{kbId}/documents")
+  public List<DocumentView> documents(
+      @RequestHeader("X-Agent-Key") String key,
+      @RequestHeader("X-Username") String username,
+      @PathVariable Long kbId) {
+    return tools.listDocuments(key, username, kbId);
+  }
+
+  @GetMapping("/documents/{id}")
+  public Map<String, Object> document(
+      @RequestHeader("X-Agent-Key") String key,
+      @RequestHeader("X-Username") String username,
+      @PathVariable Long id) {
+    return tools.documentDiagnostics(key, username, id);
+  }
+
+  @PostMapping("/documents/{id}/retry")
+  public Map<String, Object> retryDocument(
+      @RequestHeader("X-Agent-Key") String key,
+      @RequestHeader("X-Username") String username,
+      @RequestHeader(value = "X-Agent-Approval-Id", required = false) String approvalId,
+      @RequestHeader(value = "X-Agent-Approval-Token", required = false) String approvalToken,
+      @PathVariable Long id) {
+    return tools.retryDocument(key, username, approvalId, approvalToken, id);
+  }
+}

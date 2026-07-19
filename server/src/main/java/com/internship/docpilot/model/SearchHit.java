@@ -5,17 +5,34 @@ public class SearchHit {
   private Long documentId;
   private String documentName, content, embedding;
   private Integer pageNo;
+  private Integer revisionNo;
   private double score;
+  private double lexicalScore;
+  private double vectorScore;
+  private String retrievalMode;
 
   public SearchHit() {}
 
   public SearchHit(
       Long chunkId, Long id, String name, String content, Integer page, double score, String embedding) {
+    this(chunkId, id, name, content, page, null, score, embedding);
+  }
+
+  public SearchHit(
+      Long chunkId,
+      Long id,
+      String name,
+      String content,
+      Integer page,
+      Integer revision,
+      double score,
+      String embedding) {
     this.chunkId = chunkId;
     this.documentId = id;
     this.documentName = name;
     this.content = content;
     this.pageNo = page;
+    this.revisionNo = revision;
     this.score = score;
     this.embedding = embedding;
   }
@@ -60,12 +77,44 @@ public class SearchHit {
     pageNo = v;
   }
 
+  public Integer getRevisionNo() {
+    return revisionNo;
+  }
+
+  public void setRevisionNo(Integer value) {
+    revisionNo = value;
+  }
+
   public double getScore() {
     return score;
   }
 
   public void setScore(double v) {
     score = v;
+  }
+
+  public double getLexicalScore() {
+    return lexicalScore;
+  }
+
+  public void setLexicalScore(double value) {
+    lexicalScore = value;
+  }
+
+  public double getVectorScore() {
+    return vectorScore;
+  }
+
+  public void setVectorScore(double value) {
+    vectorScore = value;
+  }
+
+  public String getRetrievalMode() {
+    return retrievalMode;
+  }
+
+  public void setRetrievalMode(String value) {
+    retrievalMode = value;
   }
 
   @com.fasterxml.jackson.annotation.JsonIgnore

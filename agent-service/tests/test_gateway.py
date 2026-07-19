@@ -14,9 +14,6 @@ def settings() -> Settings:
         ollama_model="test",
         docpilot_base_url="http://docpilot",
         docpilot_internal_key="doc-key",
-        yanyue_enabled=True,
-        yanyue_base_url="http://yanyue",
-        yanyue_internal_key="yy-key",
         checkpoint_backend="sqlite",
         checkpoint_path=":memory:",
         checkpoint_dsn="",
@@ -46,14 +43,18 @@ def test_search_forwards_identity_and_scope() -> None:
     assert hits[0]["chunkId"] == 7
 
 
-def test_write_gateway_requires_approved_header() -> None:
+def test_document_retry_gateway_requires_approved_header() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.headers["X-Agent-Key"] == "yy-key"
-        assert request.headers["X-Agent-Approval"] == "approved"
-        return httpx.Response(200, json={"id": 11, "status": "BOOKED"})
+        assert request.headers["X-Agent-Key"] == "doc-key"
+        assert request.headers["X-Agent-Approval-Id"] == "approval-123"
+        assert request.headers["X-Agent-Approval-Token"] == "signed-token-123456"
+        assert request.url.path == "/api/internal/agent/documents/11/retry"
+        return httpx.Response(200, json={"id": 11, "status": "PENDING"})
 
     gateway = InternalGateway(settings(), httpx.Client(transport=httpx.MockTransport(handler)))
-    result = gateway.create_reservation("alice", {"requestId": "r1"})
+    result = gateway.retry_document_parsing(
+        "alice", 11, "approval-123", "signed-token-123456"
+    )
     assert result["id"] == 11
 
 
