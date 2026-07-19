@@ -6,8 +6,8 @@ services:
       MYSQL_DATABASE: docpilot
       TZ: Asia/Shanghai
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-ft-min-token-size=1
-    tmpfs:
-      - /var/lib/mysql
+    volumes:
+      - mysql-smoke:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -psmoke-mysql-password"]
       interval: 3s
@@ -81,3 +81,5 @@ services:
       timeout: 3s
       retries: 40
 
+volumes:
+  mysql-smoke:

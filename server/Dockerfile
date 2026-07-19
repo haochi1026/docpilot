@@ -2,9 +2,9 @@ FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-# Building a release image is also a correctness gate: unit tests must pass.
+# Building a release image is also a correctness gate: tests and JaCoCo must pass.
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -ntp -Dmaven.wagon.http.retryHandler.count=5 test package
+    mvn -B -ntp -Dmaven.wagon.http.retryHandler.count=5 verify
 
 FROM eclipse-temurin:17-jre-jammy
 RUN apt-get update \

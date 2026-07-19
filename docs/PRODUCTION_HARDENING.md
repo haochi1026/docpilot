@@ -4,7 +4,14 @@
 
 MySQL forward migrations are managed only by Flyway under `server/src/main/resources/db/migration`. `V1__baseline.sql` is the canonical initial schema; `schema.sql` is retained as a legacy reference and is not executed at startup. New changes must be added as numbered migrations. `V2__production_consistency.sql` adds document leases, embedding model metadata, tombstones, Outbox dead-letter fields and foreign keys. The migration is validated on startup and destructive `clean` is disabled.
 
-Use `scripts/backup-mysql.ps1` before applying migrations. The script uses `mysqldump --single-transaction` and removes local dumps older than 14 days.
+Use `scripts/backup-mysql.ps1` before applying migrations. The script uses `mysqldump --single-transaction` and removes local dumps older than 14 days. Restore into a separate verification database first:
+
+```powershell
+$dump = .\scripts\backup-mysql.ps1
+.\scripts\restore-mysql.ps1 -BackupFile $dump -TargetDatabase docpilot_restore -Replace
+```
+
+The restore command rejects unsafe database identifiers, will not replace an existing database without `-Replace`, imports inside the MySQL container and verifies that the restored schema contains tables.
 
 ## Document parse safety and revisions
 
@@ -21,3 +28,9 @@ The dispatcher selects up to 32 messages per tick and atomically claims each row
 `POST /api/kbs/{id}/embedding-migrate` builds a complete shadow set and promotes it only after count validation. pgvector tables are dimension-specific (`document_chunk_vector_<dimension>`), so model migrations do not mix vector spaces; the repository validates the active dimension at startup and deletes abandoned shadow aliases after 24 hours. Agent checkpoints can be cleaned through `/v1/admin/checkpoints/cleanup`, and a periodic task applies `CHECKPOINT_RETENTION_DAYS` while retaining the newest checkpoint for every thread.
 
 The Agent container runs as a non-root user and installs the checked-in `requirements.lock`. `scripts/scan-images.ps1` runs a Trivy HIGH/CRITICAL scan. In production, configure AgentOps with `AUTH_MODE=hmac` and a secret, then issue short-lived identity tokens with `scripts/issue_identity_token.py`; actor/tenant/role headers are not trusted in that mode.
+
+## Release gates and recovery drills
+
+The server image runs all JUnit tests and enforces a JaCoCo line-coverage floor of 14%; the Agent test image runs all pytest cases and enforces 74%. These values are current measured baselines, not targets: new work must not lower them and should raise them as integration coverage grows.
+
+CI boots empty MySQL, Redis, MinIO and pgvector instances, requires the exact successful Flyway history through V4, checks the database-enforced open-Outbox uniqueness constraint, restarts MySQL and waits for the service to recover, then performs a real dump/restore. It also clones the schema, rewinds only the V4 change and verifies that the current image can upgrade that pre-V4 database forward. A release is not considered migration-safe merely because a fresh install starts.

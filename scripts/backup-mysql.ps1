@@ -6,13 +6,16 @@ $ErrorActionPreference = "Stop"
 if (-not $OutputDir) { $OutputDir = Join-Path $PSScriptRoot "..\backups" }
 $resolved = [System.IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force -Path $resolved | Out-Null
-$container = (docker compose ps -q mysql).Trim()
+$containerOutput = docker compose ps -q mysql
+$container = ([string]$containerOutput).Trim()
 if (-not $container) { throw "DocPilot MySQL container is not running" }
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
 $remote = "/tmp/docpilot-backup.sql"
 $file = Join-Path $resolved "docpilot-$stamp.sql"
 try {
-  docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --events --result-file=/tmp/docpilot-backup.sql docpilot'
+  $rootPassword = (docker exec $container printenv MYSQL_ROOT_PASSWORD).Trim()
+  if (-not $rootPassword) { throw "MySQL root password is unavailable in the container" }
+  docker exec --env "MYSQL_PWD=$rootPassword" $container mysqldump --user=root --single-transaction --routines --events --result-file=$remote docpilot
   if ($LASTEXITCODE -ne 0) { throw "mysqldump failed" }
   docker cp "${container}:${remote}" $file
   if ($LASTEXITCODE -ne 0) { throw "docker cp failed" }

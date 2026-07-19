@@ -12,7 +12,7 @@ COPY requirements-dev.txt requirements-dev.lock ./
 RUN pip install --no-cache-dir -r requirements-dev.lock
 COPY app ./app
 COPY tests ./tests
-RUN python -m pytest -q
+RUN python -m pytest -q --cov=app --cov-report=term-missing --cov-fail-under=74
 
 FROM dependencies AS runtime
 COPY app ./app

@@ -16,14 +16,74 @@ jobs:
         run: docker build -t docpilot-server ./server
       - name: Smoke-test Flyway and service startup on fresh databases
         run: docker compose -p docpilot-ci -f docker-compose.smoke.yml up -d --build --wait --wait-timeout 240
-      - name: Verify latest MySQL migration
+      - name: Verify migration history and Outbox invariant
         run: |
-          docker compose -p docpilot-ci -f docker-compose.smoke.yml exec -T mysql \
+          set -euo pipefail
+          migrations="$(docker compose -p docpilot-ci -f docker-compose.smoke.yml exec -T mysql \
             mysql -uroot -psmoke-mysql-password -Nse \
-            "SELECT version,success FROM docpilot.flyway_schema_history ORDER BY installed_rank"
+            "SELECT GROUP_CONCAT(CONCAT(version, ':', success) ORDER BY installed_rank) FROM docpilot.flyway_schema_history")"
+          test "$migrations" = "1:1,2:1,3:1,4:1"
+          index_count="$(docker compose -p docpilot-ci -f docker-compose.smoke.yml exec -T mysql \
+            mysql -uroot -psmoke-mysql-password -Nse \
+            "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='docpilot' AND table_name='outbox_message' AND index_name='uk_outbox_open_dedupe'")"
+          test "$index_count" = "1"
+      - name: Exercise database restart recovery
+        run: |
+          set -euo pipefail
+          docker compose -p docpilot-ci -f docker-compose.smoke.yml restart mysql
+          recovered=false
+          for attempt in $(seq 1 40); do
+            if docker compose -p docpilot-ci -f docker-compose.smoke.yml exec -T server \
+              wget -qO- http://localhost:8080/actuator/health >/dev/null 2>&1; then
+              recovered=true
+              break
+            fi
+            sleep 3
+          done
+          test "$recovered" = "true"
+          version_after_restart="$(docker compose -p docpilot-ci -f docker-compose.smoke.yml exec -T mysql \
+            mysql -uroot -psmoke-mysql-password -Nse \
+            "SELECT COUNT(*) FROM docpilot.flyway_schema_history WHERE version='4' AND success=1")"
+          test "$version_after_restart" = "1"
+      - name: Drill backup restore and pre-V4 forward migration
+        run: |
+          set -euo pipefail
+          compose="docker compose -p docpilot-ci -f docker-compose.smoke.yml"
+          $compose exec -T -e MYSQL_PWD=smoke-mysql-password mysql \
+            mysqldump --user=root --single-transaction --result-file=/tmp/docpilot-ci.sql docpilot
+          $compose exec -T -e MYSQL_PWD=smoke-mysql-password mysql \
+            mysql --user=root --execute='DROP DATABASE IF EXISTS docpilot_restore; CREATE DATABASE docpilot_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+          $compose exec -T -e MYSQL_PWD=smoke-mysql-password mysql \
+            mysql --user=root --database=docpilot_restore --execute='source /tmp/docpilot-ci.sql'
+          source_tables="$($compose exec -T mysql mysql -uroot -psmoke-mysql-password -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='docpilot'")"
+          restored_tables="$($compose exec -T mysql mysql -uroot -psmoke-mysql-password -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='docpilot_restore'")"
+          test "$source_tables" = "$restored_tables"
+          test "$restored_tables" -gt 0
+
+          $compose exec -T -e MYSQL_PWD=smoke-mysql-password mysql \
+            mysql --user=root --execute='DROP DATABASE IF EXISTS docpilot_legacy; CREATE DATABASE docpilot_legacy CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+          $compose exec -T -e MYSQL_PWD=smoke-mysql-password mysql \
+            mysql --user=root --database=docpilot_legacy --execute='source /tmp/docpilot-ci.sql'
+          $compose exec -T mysql mysql -uroot -psmoke-mysql-password docpilot_legacy -e \
+            "ALTER TABLE outbox_message DROP INDEX uk_outbox_open_dedupe, DROP COLUMN open_dedupe_key; DELETE FROM flyway_schema_history WHERE version='4';"
+          $compose run -d --no-deps --name docpilot-migration-probe \
+            -e 'DB_URL=jdbc:mysql://mysql:3306/docpilot_legacy?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false' \
+            --entrypoint java server -jar /app/app.jar
+          migrated=false
+          for attempt in $(seq 1 40); do
+            version="$($compose exec -T mysql mysql -uroot -psmoke-mysql-password -Nse "SELECT COUNT(*) FROM docpilot_legacy.flyway_schema_history WHERE version='4' AND success=1")"
+            if [ "$version" = "1" ]; then migrated=true; break; fi
+            sleep 3
+          done
+          test "$migrated" = "true"
+          $compose exec -T mysql mysql -uroot -psmoke-mysql-password -Nse \
+            "SELECT open_dedupe_key FROM docpilot_legacy.outbox_message LIMIT 0"
+          docker rm -f docpilot-migration-probe
       - name: Tear down smoke stack
         if: always()
-        run: docker compose -p docpilot-ci -f docker-compose.smoke.yml down --remove-orphans
+        run: |
+          docker rm -f docpilot-migration-probe 2>/dev/null || true
+          docker compose -p docpilot-ci -f docker-compose.smoke.yml down --volumes --remove-orphans
 
   agent:
     runs-on: ubuntu-latest
