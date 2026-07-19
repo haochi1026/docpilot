@@ -187,6 +187,9 @@ def test_trace_export_redacts_secrets_and_records_span() -> None:
     )
     traces.finish(context, token, status="SUCCESS", output_preview="answer")
     assert payloads[1]["input"]["api_key"] == "***"
+    assert payloads[0]["input_preview"].startswith("[content-redacted sha256=")
+    assert payloads[1]["input"]["query"].startswith("[content-redacted sha256=")
+    assert payloads[1]["output"]["usage"]["source"] == "unavailable"
     assert len(payloads) == 3
     traces.close()
 
@@ -227,6 +230,11 @@ def test_trace_client_mints_short_lived_agentops_identity() -> None:
         assert payload["sub"] == "docpilot-agent"
         assert payload["tenant"] == "tenant-a"
         assert payload["role"] == "OPERATOR"
+        assert payload["iss"] == "docpilot-agent"
+        assert payload["aud"] == "agentops-hub"
+        assert payload["kid"] == "v1"
+        assert payload["nbf"] <= payload["iat"] <= int(time.time())
+        assert payload["jti"]
         assert int(time.time()) < payload["exp"] <= int(time.time()) + 300
         return httpx.Response(200, json={}, request=request)
 

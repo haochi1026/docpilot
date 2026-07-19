@@ -55,6 +55,10 @@ class Settings:
     agentops_identity_subject: str = "docpilot-agent"
     agentops_identity_tenant: str = "default"
     agentops_identity_role: str = "OPERATOR"
+    agentops_identity_issuer: str = "docpilot-agent"
+    agentops_identity_audience: str = "agentops-hub"
+    agentops_identity_key_id: str = "v1"
+    trace_capture_content: bool = False
 
     @property
     def production(self) -> bool:
@@ -90,6 +94,10 @@ class Settings:
                 )
         if self.agentops_identity_role not in {"ADMIN", "OPERATOR", "VIEWER"}:
             raise ValueError("AGENTOPS_IDENTITY_ROLE must be ADMIN, OPERATOR or VIEWER")
+        if not self.agentops_identity_issuer or not self.agentops_identity_audience:
+            raise ValueError("AgentOps identity issuer and audience are required")
+        if not self.agentops_identity_key_id:
+            raise ValueError("AGENTOPS_IDENTITY_KEY_ID is required")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -136,6 +144,14 @@ class Settings:
             agentops_identity_role=os.getenv(
                 "AGENTOPS_IDENTITY_ROLE", "OPERATOR"
             ).upper(),
+            agentops_identity_issuer=os.getenv(
+                "AGENTOPS_IDENTITY_ISSUER", "docpilot-agent"
+            ),
+            agentops_identity_audience=os.getenv(
+                "AGENTOPS_IDENTITY_AUDIENCE", "agentops-hub"
+            ),
+            agentops_identity_key_id=os.getenv("AGENTOPS_IDENTITY_KEY_ID", "v1"),
+            trace_capture_content=_bool("TRACE_CAPTURE_CONTENT", False),
             agentops_timeout_seconds=_float("AGENTOPS_TIMEOUT_SECONDS", 2, 0.1),
             checkpoint_retention_days=_int("CHECKPOINT_RETENTION_DAYS", 30, 1),
             checkpoint_cleanup_interval_seconds=_int("CHECKPOINT_CLEANUP_INTERVAL_SECONDS", 21600, 300),

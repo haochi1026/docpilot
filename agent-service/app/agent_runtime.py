@@ -418,6 +418,7 @@ class AgentRuntime:
                 duration_ms=int((time.perf_counter() - started) * 1000),
                 input_data={"route": state.get("route"), "message_count": len(state.get("messages", []))},
                 output_data={"tool_calls": [call.get("name") for call in getattr(response, "tool_calls", [])]},
+                usage=_model_usage(response),
             )
             return {"messages": [response], "model_calls": calls + 1}
         except Exception as exc:
@@ -659,6 +660,7 @@ class AgentRuntime:
                         duration_ms=int((time.perf_counter() - started) * 1000),
                         input_data={"source_count": len(valid_ids)},
                         output_data={"citation_ids": sorted(repaired_ids)},
+                        usage=_model_usage(repaired),
                     )
                     if (
                         repaired_ids
@@ -984,6 +986,20 @@ def _message_text(message: Any) -> str:
         return text
     content = getattr(message, "content", None)
     return content if isinstance(content, str) else ""
+
+
+def _model_usage(message: Any) -> dict[str, Any]:
+    """Read provider-reported usage; never replace missing data with estimates."""
+    usage = getattr(message, "usage_metadata", None) or {}
+    metadata = getattr(message, "response_metadata", None) or {}
+    input_tokens = usage.get("input_tokens", metadata.get("prompt_eval_count"))
+    output_tokens = usage.get("output_tokens", metadata.get("eval_count"))
+    return {
+        "input_tokens": int(input_tokens) if input_tokens is not None else None,
+        "output_tokens": int(output_tokens) if output_tokens is not None else None,
+        "cost_usd": None,
+        "source": "provider" if input_tokens is not None or output_tokens is not None else "unavailable",
+    }
 
 
 def _last_assistant_text(state: Any) -> str:

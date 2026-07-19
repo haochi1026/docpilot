@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -53,6 +54,10 @@ class TraceClient:
         self.identity_subject = settings.agentops_identity_subject
         self.identity_tenant = settings.agentops_identity_tenant
         self.identity_role = settings.agentops_identity_role
+        self.identity_issuer = settings.agentops_identity_issuer
+        self.identity_audience = settings.agentops_identity_audience
+        self.identity_key_id = settings.agentops_identity_key_id
+        self.capture_content = settings.trace_capture_content
         self.client = client or httpx.Client(timeout=settings.agentops_timeout_seconds)
         self._otel = None
         if otel_trace is not None:
@@ -89,7 +94,7 @@ class TraceClient:
                 "thread_id": thread_id,
                 "request_id": context.request_id,
                 "status": "RUNNING",
-                "input_preview": _preview(input_preview),
+                "input_preview": _trace_preview(input_preview, self.capture_content),
                 "metadata": metadata,
             },
         )
@@ -105,24 +110,27 @@ class TraceClient:
         input_data: Any = None,
         output_data: Any = None,
         error: str | None = None,
+        usage: dict[str, Any] | None = None,
     ) -> None:
         context = _current_trace.get()
         if context is None:
             return
         if self._otel is not None:
-            with self._otel.start_as_current_span(
-                name,
-                attributes={
+            attributes: dict[str, Any] = {
                     "agent.span.kind": kind,
                     "agent.status": status,
                     "llm.model": context.metadata.get("model", "unknown"),
                     "llm.prompt_version": context.metadata.get("prompt_version", "unknown"),
-                    "llm.input_tokens": max(1, len(str(input_data or "")) // 4),
-                    "llm.output_tokens": max(0, len(str(output_data or "")) // 4),
-                    "llm.cost_usd": float(context.metadata.get("cost_usd", 0.0) or 0.0),
                     "agent.duration_ms": max(0, duration_ms),
-                },
-            ) as otel_span:
+                    "llm.usage_source": str((usage or {}).get("source", "unavailable")),
+                }
+            if usage and usage.get("input_tokens") is not None:
+                attributes["llm.input_tokens"] = int(usage["input_tokens"])
+            if usage and usage.get("output_tokens") is not None:
+                attributes["llm.output_tokens"] = int(usage["output_tokens"])
+            if usage and usage.get("cost_usd") is not None:
+                attributes["llm.cost_usd"] = float(usage["cost_usd"])
+            with self._otel.start_as_current_span(name, attributes=attributes) as otel_span:
                 otel_span.set_attribute("agent.duration_ms", max(0, duration_ms))
         if not context.exported:
             return
@@ -133,9 +141,12 @@ class TraceClient:
                 "kind": kind,
                 "status": status,
                 "duration_ms": max(0, duration_ms),
-                "input": _redact(input_data),
-                "output": _redact(output_data),
-                "error": _preview(error or "") or None,
+                "input": _redact(input_data, self.capture_content),
+                "output": {
+                    "data": _redact(output_data, self.capture_content),
+                    "usage": usage or {"source": "unavailable"},
+                },
+                "error": _trace_preview(error or "", self.capture_content) or None,
             },
         )
 
@@ -155,8 +166,8 @@ class TraceClient:
                 {
                     "status": status,
                     "duration_ms": duration_ms,
-                    "output_preview": _preview(output_preview),
-                    "error": _preview(error or "") or None,
+                    "output_preview": _trace_preview(output_preview, self.capture_content),
+                    "error": _trace_preview(error or "", self.capture_content) or None,
                 },
             )
         # Starlette may advance a synchronous streaming iterator in copied worker
@@ -192,14 +203,22 @@ class TraceClient:
         """Mint a short-lived service identity instead of storing an expiring token."""
         if not self.identity_token_secret:
             return ""
+        now = int(time.time())
         raw = json.dumps(
             {
                 "sub": self.identity_subject,
                 "tenant": self.identity_tenant,
                 "role": self.identity_role,
-                "exp": int(time.time()) + 300,
+                "iss": self.identity_issuer,
+                "aud": self.identity_audience,
+                "kid": self.identity_key_id,
+                "iat": now,
+                "nbf": now - 5,
+                "exp": now + 300,
+                "jti": str(uuid.uuid4()),
             },
             separators=(",", ":"),
+            sort_keys=True,
         ).encode()
         encoded = base64.urlsafe_b64encode(raw).decode().rstrip("=")
         signature = base64.urlsafe_b64encode(
@@ -246,22 +265,47 @@ def current_trace() -> TraceContext | None:
 
 
 def _preview(value: str, limit: int = 500) -> str:
-    value = value.strip()
+    value = _mask_text(value.strip())
     return value if len(value) <= limit else value[:limit] + "..."
 
 
-def _redact(value: Any) -> Any:
+def _trace_preview(value: str, capture_content: bool) -> str:
+    value = value.strip()
+    if not value:
+        return ""
+    return _preview(value) if capture_content else _fingerprint(value)
+
+
+def _redact(value: Any, capture_content: bool = False, key_hint: str = "") -> Any:
     if isinstance(value, dict):
         result: dict[str, Any] = {}
         for key, item in value.items():
             lowered = str(key).lower()
-            if any(marker in lowered for marker in ("key", "token", "secret", "password")):
+            if any(marker in lowered for marker in ("key", "token", "secret", "password", "authorization", "cookie")):
                 result[str(key)] = "***"
             else:
-                result[str(key)] = _redact(item)
+                result[str(key)] = _redact(item, capture_content, lowered)
         return result
     if isinstance(value, list):
-        return [_redact(item) for item in value[:20]]
+        return [_redact(item, capture_content, key_hint) for item in value[:20]]
     if isinstance(value, str):
+        content_key = any(
+            marker in key_hint
+            for marker in ("content", "text", "body", "prompt", "query", "answer", "message", "preview")
+        )
+        if not capture_content and (content_key or len(value) > 120):
+            return _fingerprint(value)
         return _preview(value)
+    return value
+
+
+def _fingerprint(value: str) -> str:
+    digest = hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:16]
+    return f"[content-redacted sha256={digest} chars={len(value)}]"
+
+
+def _mask_text(value: str) -> str:
+    value = re.sub(r"(?i)bearer\s+[a-z0-9._~+\-/]+=*", "Bearer ***", value)
+    value = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "***@***", value)
+    value = re.sub(r"(?<!\d)1[3-9]\d{9}(?!\d)", "1**********", value)
     return value
