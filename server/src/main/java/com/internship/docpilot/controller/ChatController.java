@@ -4,7 +4,7 @@ import com.internship.docpilot.config.UserPrincipal;
 import com.internship.docpilot.dto.AgentResumeRequest;
 import com.internship.docpilot.dto.ChatRequest;
 import com.internship.docpilot.service.ChatService;
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

@@ -31,6 +31,6 @@ The Agent container runs as a non-root user and installs the checked-in `require
 
 ## Release gates and recovery drills
 
-The server image runs all JUnit tests and enforces a JaCoCo line-coverage floor of 14%; the Agent test image runs all pytest cases and enforces 74%. These values are current measured baselines, not targets: new work must not lower them and should raise them as integration coverage grows.
+The server uses the supported Java 17, Spring Boot 3.5 and Jakarta API baseline. Its image build runs all JUnit tests and enforces a JaCoCo line-coverage floor of 14%; the Agent test image runs all pytest cases and enforces 74%. These values are current measured baselines, not targets: new work must not lower them and should raise them as integration coverage grows.
 
 CI boots empty MySQL, Redis, MinIO and pgvector instances, requires the exact successful Flyway history through V4, checks the database-enforced open-Outbox uniqueness constraint, restarts MySQL and waits for the service to recover, then performs a real dump/restore. It also clones the schema, rewinds only the V4 change and verifies that the current image can upgrade that pre-V4 database forward. A release is not considered migration-safe merely because a fresh install starts.

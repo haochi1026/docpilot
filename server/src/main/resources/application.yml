@@ -26,10 +26,11 @@ spring:
     out-of-order: false
     clean-disabled: true
     locations: classpath:db/migration
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    timeout: 1500ms
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 1500ms
   jackson:
     time-zone: Asia/Shanghai
 

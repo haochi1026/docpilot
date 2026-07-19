@@ -7,7 +7,7 @@ import com.internship.docpilot.model.SearchHit;
 import com.internship.docpilot.service.AgentToolService;
 import java.util.List;
 import java.util.Map;
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

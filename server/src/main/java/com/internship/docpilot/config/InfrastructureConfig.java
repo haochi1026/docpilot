@@ -13,7 +13,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 public class InfrastructureConfig {
   @Bean(destroyMethod = "shutdown")
   public RedissonClient redisson(
-      @Value("${spring.redis.host}") String host, @Value("${spring.redis.port}") int port) {
+      @Value("${spring.data.redis.host}") String host,
+      @Value("${spring.data.redis.port}") int port) {
     Config config = new Config();
     config
         .useSingleServer()

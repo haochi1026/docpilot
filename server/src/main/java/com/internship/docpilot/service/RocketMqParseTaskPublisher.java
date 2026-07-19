@@ -2,8 +2,8 @@ package com.internship.docpilot.service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;

@@ -1,6 +1,6 @@
 package com.internship.docpilot.dto;
 
-import javax.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotBlank;
 
 public class ModelSettingsRequest {
   @NotBlank private String aiMode;

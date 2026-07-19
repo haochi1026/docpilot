@@ -176,7 +176,7 @@ docker compose -f docker-compose.yml -f docker-compose.rocketmq.yml down -v
 
 ## 七、本地开发启动
 
-需要 JDK 8+、Maven 3.8+、Node.js 18+，并先通过 Docker 启动 MySQL、Redis 和 MinIO：
+需要 JDK 17+、Maven 3.9+、Node.js 18+，并先通过 Docker 启动 MySQL、Redis 和 MinIO：
 
 ```powershell
 docker compose up -d mysql redis minio

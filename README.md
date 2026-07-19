@@ -145,7 +145,7 @@ flowchart TB
 
 | 层级 | 技术 |
 | --- | --- |
-| 后端 | Java 8、Spring Boot 2.7、Spring Security、Spring JDBC |
+| 后端 | Java 17、Spring Boot 3.5、Spring Security、Spring JDBC |
 | 数据与缓存 | MySQL 8.0、PostgreSQL 17 + pgvector、Redis 7.2、Redisson 3.23 |
 | 文档处理 | MinIO、Apache Tika 2.9、PDFBox、Tesseract OCR |
 | 异步任务 | 本地消息表、受控线程池、可选 RocketMQ 4.9 |
@@ -191,7 +191,7 @@ docpilot/
 
 | 组件 | 建议版本 | 说明 |
 | --- | --- | --- |
-| JDK | 8 或更高 | 容器构建使用 JDK 17，源码兼容 Java 8 |
+| JDK | 17 或更高 | Spring Boot 3.5 与 Jakarta API 基线 |
 | Node.js | 20 | Vue 前端构建 |
 | MySQL | 8.0 | 元数据、切片、ACL、Outbox、模型配置 |
 | PostgreSQL + pgvector | 17 | 向量存储与 HNSW 近邻索引 |
