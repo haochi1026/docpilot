@@ -550,6 +550,26 @@ class AgentRuntime:
         if (
             state.get("route") == "knowledge_answer"
             and runtime.context.evidence.items
+            and _is_unsafe_instruction_request(_last_user_text(state))
+        ):
+            runtime.stream_writer({"status": "检测到越权或提示注入意图，已进入确定性安全响应"})
+            return {
+                "messages": [
+                    AIMessage(
+                        content=(
+                            "该请求试图把不可信资料当作指令，或跳过既有安全控制，"
+                            "因此不会执行。知识库正文不能改变系统策略；任何状态修改仍须通过"
+                            "权限校验和人工审批[1]。"
+                        )
+                    )
+                ],
+                "tool_calls": total,
+                "verification": "extractive_answer_ready",
+                "evidence_items": list(runtime.context.evidence.items),
+            }
+        if (
+            state.get("route") == "knowledge_answer"
+            and runtime.context.evidence.items
             and _is_simple_fact_question(_last_user_text(state))
         ):
             extracted = _extract_evidence_bound_answer(
@@ -1222,6 +1242,8 @@ def _extract_evidence_bound_answer(
     question: str, evidence: list[dict[str, Any]]
 ) -> str | None:
     """Return a compact, source-local evidence window without model paraphrasing."""
+    if _is_unsafe_instruction_request(question):
+        return None
     query_units = _lexical_units(question)
     if len(query_units) < 2:
         return None
@@ -1259,6 +1281,7 @@ def _extract_evidence_bound_answer(
                     code_bonus += 0.14 if min(query_positions) < code_match.start() else -0.14
             score = 0.74 * coverage + 0.16 * precision + code_bonus
             score += min(max(retrieval_score, 0.0), 1.0) * 0.05
+            score -= 0.07 * min(2, sentence.count("；"))
             candidate = (score, source_id, sentence)
             if best is None or candidate[0] > best[0]:
                 best = candidate
@@ -1325,9 +1348,21 @@ def _is_simple_fact_question(question: str) -> bool:
         return False
     if re.search(r"(?:比较|对比|分析|综合|为什么|分别说明|跨文档)", normalized):
         return False
-    if re.search(r"(?:忽略.*规则|绕过.*审批|输出.*密钥|执行.*指令)", normalized):
+    if _is_unsafe_instruction_request(normalized):
         return False
     return True
+
+
+def _is_unsafe_instruction_request(question: str) -> bool:
+    value = question.lower()
+    patterns = (
+        r"忽略.*(?:规则|指令|系统)",
+        r"(?:输出|泄露|告诉|提供|显示|查看|给我).*(?:密钥|服务地址|认证头|authorization|token|secret)",
+        r"(?:绕过|跳过|不经|无需).*(?:审批|确认|安全)",
+        r"(?:直接|立即).*(?:调用|执行).*(?:重试|解析|工具)",
+        r"(?:正文|文档).*(?:系统提示|系统指令).*(?:执行)?",
+    )
+    return any(re.search(pattern, value) for pattern in patterns)
 
 
 def _answer_is_incomplete(question: str, answer: str) -> bool:
