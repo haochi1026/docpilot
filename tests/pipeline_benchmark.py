@@ -119,7 +119,13 @@ class Api:
         self.token = response["data"]["token"]
         return response["data"]
 
-    def sse_chat(self, kb_id: int, question: str, timeout: float = 150.0) -> dict[str, Any]:
+    def sse_chat(
+        self,
+        kb_id: int,
+        question: str,
+        expected: str | None = None,
+        timeout: float = 180.0,
+    ) -> dict[str, Any]:
         payload = json.dumps(
             {"kbId": kb_id, "question": question}, ensure_ascii=False
         ).encode("utf-8")
@@ -138,6 +144,7 @@ class Api:
         first_token_ms: float | None = None
         events: list[str] = []
         token_chars = 0
+        answer = ""
         current_event = "message"
         status = 0
         error_text = None
@@ -158,6 +165,9 @@ class Api:
                             if first_token_ms is None:
                                 first_token_ms = (time.perf_counter() - started) * 1000
                             token_chars += len(data)
+                            answer += data
+                        elif current_event == "replace":
+                            answer = data
                         if current_event in ("done", "error"):
                             if current_event == "error":
                                 error_text = data
@@ -177,7 +187,13 @@ class Api:
             "tokenChars": token_chars,
             "events": events,
             "error": error_text,
-            "passed": status == 200 and "done" in events and error_text is None,
+            "answer": answer,
+            "expected": expected,
+            "correct": expected is None or expected.lower() in answer.lower(),
+            "passed": status == 200
+            and "done" in events
+            and error_text is None
+            and (expected is None or expected.lower() in answer.lower()),
         }
 
 
@@ -212,6 +228,30 @@ def make_text(run_id: str, index: int, size_kb: int) -> bytes:
     return (fact * repeat).encode("utf-8")
 
 
+def load_fixture_workloads(directory: Path) -> list[dict[str, Any]]:
+    manifest_path = directory / "manifest.json"
+    if not manifest_path.exists():
+        raise RuntimeError(f"fixture manifest does not exist: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    workloads: list[dict[str, Any]] = []
+    for item in manifest.get("documents", []):
+        path = directory / str(item["filename"])
+        if not path.is_file():
+            raise RuntimeError(f"fixture file does not exist: {path}")
+        workloads.append(
+            {
+                "filename": path.name,
+                "content": path.read_bytes(),
+                "question": str(item["question"]),
+                "expected": str(item["expected"]),
+                "kind": str(item.get("kind", path.suffix.lower().lstrip("."))),
+            }
+        )
+    if not workloads:
+        raise RuntimeError("fixture manifest contains no documents")
+    return workloads
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:18081")
@@ -222,6 +262,8 @@ def main() -> int:
     parser.add_argument("--size-kb", type=int, default=64)
     parser.add_argument("--parse-timeout", type=float, default=240.0)
     parser.add_argument("--chat-concurrency", type=int, default=1)
+    parser.add_argument("--chat-requests", type=int, default=0)
+    parser.add_argument("--fixture-dir", type=Path)
     parser.add_argument("--ollama", action="store_true")
     parser.add_argument("--ai-model", default="qwen3.5:2b")
     parser.add_argument("--embedding-model", default="qwen3-embedding:0.6b")
@@ -235,8 +277,12 @@ def main() -> int:
         parser.error("--uploads must be between 1 and 100")
     if args.workers < 1 or args.workers > args.uploads:
         parser.error("--workers must be between 1 and --uploads")
-    if args.chat_concurrency < 0 or args.chat_concurrency > 3:
-        parser.error("--chat-concurrency must be between 0 and 3")
+    if args.chat_concurrency < 0 or args.chat_concurrency > 32:
+        parser.error("--chat-concurrency must be between 0 and 32")
+    if args.chat_requests < 0 or args.chat_requests > 1000:
+        parser.error("--chat-requests must be between 0 and 1000")
+    if args.chat_concurrency == 0 and args.chat_requests > 0:
+        parser.error("--chat-concurrency must be positive when --chat-requests is used")
 
     api = Api(args.base_url)
     health = api.request("GET", "/actuator/health", auth=False)
@@ -268,6 +314,10 @@ def main() -> int:
     original_settings: dict[str, Any] | None = None
     uploaded_ids: list[int] = []
     failures: list[str] = []
+    fixture_workloads = (
+        load_fixture_workloads(args.fixture_dir.resolve()) if args.fixture_dir else []
+    )
+    uploaded_workloads: dict[int, dict[str, Any]] = {}
 
     try:
         if args.ollama:
@@ -297,15 +347,33 @@ def main() -> int:
         upload_gate = threading.Event()
 
         def upload_one(index: int) -> dict[str, Any]:
-            content = make_text(run_id, index, args.size_kb)
+            if fixture_workloads:
+                fixture = fixture_workloads[index % len(fixture_workloads)]
+                filename = f"benchmark-{run_id}-{index}-{fixture['filename']}"
+                content = fixture["content"]
+            else:
+                fixture = {
+                    "question": f"What is the verification code for document {index}?",
+                    "expected": f"DP-{run_id}-{index}",
+                    "kind": "synthetic-text",
+                }
+                filename = f"benchmark-{run_id}-{index}.txt"
+                content = make_text(run_id, index, args.size_kb)
             upload_gate.wait(timeout=20)
             response = api.upload(
                 kb_id,
-                f"benchmark-{run_id}-{index}.txt",
+                filename,
                 content,
                 timeout=max(30.0, args.size_kb / 128.0),
             )
             response["index"] = index
+            response["workload"] = {
+                "question": fixture["question"],
+                "expected": fixture["expected"],
+                "kind": fixture["kind"],
+                "filename": filename,
+                "bytes": len(content),
+            }
             response["acceptedAtMonotonic"] = time.perf_counter()
             return response
 
@@ -317,7 +385,9 @@ def main() -> int:
         upload_wall_ms = (time.perf_counter() - upload_started) * 1000
         for response in upload_responses:
             if response["status"] == 200 and response["data"]:
-                uploaded_ids.append(int(response["data"]["id"]))
+                document_id = int(response["data"]["id"])
+                uploaded_ids.append(document_id)
+                uploaded_workloads[document_id] = response["workload"]
         upload_passed = len(uploaded_ids) == args.uploads
         if not upload_passed:
             failures.append("concurrentUpload")
@@ -331,6 +401,26 @@ def main() -> int:
             "wallMs": round(upload_wall_ms, 2),
             "throughputPerSecond": round(args.uploads / (upload_wall_ms / 1000), 2),
             "documentIds": uploaded_ids,
+            "failedResponses": [
+                {
+                    "index": response["index"],
+                    "status": response["status"],
+                    "raw": response["raw"][:1000],
+                    "workload": response["workload"],
+                }
+                for response in upload_responses
+                if response["status"] != 200
+            ],
+            "formats": {
+                kind: sum(
+                    1
+                    for workload in uploaded_workloads.values()
+                    if workload["kind"] == kind
+                )
+                for kind in sorted(
+                    {workload["kind"] for workload in uploaded_workloads.values()}
+                )
+            },
         }
 
         accepted_times = {
@@ -382,27 +472,37 @@ def main() -> int:
         }
 
         if args.chat_concurrency > 0 and parse_passed:
-            chat_barrier = threading.Barrier(args.chat_concurrency)
+            chat_request_count = args.chat_requests or args.chat_concurrency
+            chat_barrier = threading.Barrier(min(args.chat_concurrency, chat_request_count))
 
             def chat_one(index: int) -> dict[str, Any]:
                 try:
                     chat_barrier.wait(timeout=20)
                 except threading.BrokenBarrierError:
                     pass
+                document_id = uploaded_ids[index % len(uploaded_ids)]
+                workload = uploaded_workloads[document_id]
                 return api.sse_chat(
-                    kb_id,
-                    f"What is the verification code for document {index % args.uploads}?",
+                    kb_id, workload["question"], expected=workload["expected"]
                 )
 
             with concurrent.futures.ThreadPoolExecutor(
-                max_workers=args.chat_concurrency
+                max_workers=min(args.chat_concurrency, chat_request_count)
             ) as pool:
-                chat_results = list(pool.map(chat_one, range(args.chat_concurrency)))
+                chat_results = list(pool.map(chat_one, range(chat_request_count)))
             chat_passed = all(item["passed"] for item in chat_results)
             if not chat_passed:
                 failures.append("sseChat")
             report["chat"] = {
                 "passed": chat_passed,
+                "concurrency": args.chat_concurrency,
+                "requestCount": chat_request_count,
+                "correctCount": sum(1 for item in chat_results if item["correct"]),
+                "errorRate": round(
+                    sum(1 for item in chat_results if not item["passed"])
+                    / len(chat_results),
+                    4,
+                ),
                 "firstTokenLatency": summary(
                     [
                         float(item["firstTokenMs"])

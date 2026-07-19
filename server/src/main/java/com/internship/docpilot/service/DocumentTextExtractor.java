@@ -163,8 +163,8 @@ public class DocumentTextExtractor {
         ? ""
         : value.replace('\u0000', ' ')
             .replaceAll("[ \\t]+", " ")
-            .replaceAll("\\r\\n?", "\\n")
-            .replaceAll("\\n{3,}", "\\n\\n")
+            .replaceAll("\\r\\n?", "\n")
+            .replaceAll("\\n{3,}", "\n\n")
             .trim();
   }
 

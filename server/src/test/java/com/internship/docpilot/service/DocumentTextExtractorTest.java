@@ -53,6 +53,18 @@ class DocumentTextExtractorTest {
     }
   }
 
+  @Test
+  void preservesPlainTextLineBreaks() throws Exception {
+    DocumentTextExtractor extractor = new DocumentTextExtractor(false, "eng", 5, 10, 10, 45);
+    DocumentTextExtractor.ExtractionResult result =
+        extractor.extract(
+            new ByteArrayInputStream("first line\r\nsecond line".getBytes(StandardCharsets.UTF_8)),
+            "policy.txt");
+
+    assertTrue(result.getPages().get(0).getText().contains("first line\nsecond line"));
+    assertFalse(result.getPages().get(0).getText().contains("first linensecond"));
+  }
+
   private void addPage(PDDocument pdf, String text) throws Exception {
     PDPage page = new PDPage();
     pdf.addPage(page);

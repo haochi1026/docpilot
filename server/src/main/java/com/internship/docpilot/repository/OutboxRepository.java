@@ -17,27 +17,21 @@ public class OutboxRepository {
   public void create(Long documentId) {
     String event = UUID.randomUUID().toString();
     jdbc.update(
-        "INSERT INTO outbox_message(event_id,aggregate_id,event_type,payload,status) "
-            + "SELECT ?,?,'DOCUMENT_PARSE',?,'PENDING' FROM DUAL WHERE NOT EXISTS ("
-            + "SELECT 1 FROM outbox_message WHERE aggregate_id=? AND event_type='DOCUMENT_PARSE' "
-            + "AND status IN('PENDING','RETRY','SENDING'))",
+        "INSERT IGNORE INTO outbox_message(event_id,aggregate_id,event_type,payload,status) "
+            + "VALUES(?,?,'DOCUMENT_PARSE',?,'PENDING')",
         event,
         documentId,
-        "{\"documentId\":" + documentId + "}",
-        documentId);
+        "{\"documentId\":" + documentId + "}");
   }
 
   public void createDelete(Long documentId) {
     String event = UUID.randomUUID().toString();
     jdbc.update(
-        "INSERT INTO outbox_message(event_id,aggregate_id,event_type,payload,status) "
-            + "SELECT ?,?,'DOCUMENT_DELETE',?,'PENDING' FROM DUAL WHERE NOT EXISTS ("
-            + "SELECT 1 FROM outbox_message WHERE aggregate_id=? AND event_type='DOCUMENT_DELETE' "
-            + "AND status IN('PENDING','RETRY','SENDING'))",
+        "INSERT IGNORE INTO outbox_message(event_id,aggregate_id,event_type,payload,status) "
+            + "VALUES(?,?,'DOCUMENT_DELETE',?,'PENDING')",
         event,
         documentId,
-        "{\"documentId\":" + documentId + "}",
-        documentId);
+        "{\"documentId\":" + documentId + "}");
   }
 
   public Map<String, Object> next() {

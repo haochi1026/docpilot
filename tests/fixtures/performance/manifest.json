@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "documents": [
+    {
+      "filename": "structured-policy.md",
+      "kind": "markdown",
+      "question": "What is the structured policy release code?",
+      "expected": "MD-4821"
+    },
+    {
+      "filename": "operations-table.docx",
+      "kind": "docx-table",
+      "question": "What is the database recovery exercise code?",
+      "expected": "DOCX-5932"
+    },
+    {
+      "filename": "native-policy.pdf",
+      "kind": "native-pdf",
+      "question": "What is the native PDF audit code?",
+      "expected": "PDF-6843"
+    },
+    {
+      "filename": "scanned-policy.pdf",
+      "kind": "scanned-pdf-ocr",
+      "question": "What is the scanned document emergency code?",
+      "expected": "OCR-7319"
+    }
+  ]
+}

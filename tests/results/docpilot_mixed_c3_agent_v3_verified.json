@@ -1,0 +1,448 @@
+{
+  "runId": "20260719-210821-9ed9fc",
+  "startedAt": "2026-07-19T21:08:21.852828+08:00",
+  "baseUrl": "http://127.0.0.1:18081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "openai",
+    "aiModel": "qwen3.5:2b",
+    "embeddingMode": "openai",
+    "embeddingModel": "qwen3-embedding:0.6b",
+    "retrievalMode": "向量 + 词片混合检索",
+    "answerMode": "LangChain / LangGraph Agent",
+    "agentEnabled": true,
+    "queueMode": "local"
+  },
+  "parameters": {
+    "uploads": 4,
+    "workers": 4,
+    "sizeKb": 64,
+    "chatConcurrency": 3,
+    "ollama": false
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 4
+    },
+    "latency": {
+      "count": 4,
+      "minMs": 111.37,
+      "meanMs": 114.99,
+      "p50Ms": 112.19,
+      "p95Ms": 121.51,
+      "p99Ms": 121.51,
+      "maxMs": 121.51
+    },
+    "wallMs": 300.95,
+    "throughputPerSecond": 13.29,
+    "documentIds": [
+      48,
+      50,
+      49,
+      51
+    ],
+    "failedResponses": [],
+    "formats": {
+      "docx-table": 1,
+      "markdown": 1,
+      "native-pdf": 1,
+      "scanned-pdf-ocr": 1
+    }
+  },
+  "parse": {
+    "passed": true,
+    "terminalCount": 4,
+    "successCount": 4,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 4,
+      "minMs": 2109.05,
+      "meanMs": 2756.0,
+      "p50Ms": 2632.51,
+      "p95Ms": 3141.25,
+      "p99Ms": 3141.25,
+      "maxMs": 3141.25
+    },
+    "documents": {
+      "49": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2109.05
+      },
+      "50": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2632.51
+      },
+      "48": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3141.25
+      },
+      "51": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3141.18
+      }
+    }
+  },
+  "chat": {
+    "passed": true,
+    "concurrency": 3,
+    "requestCount": 12,
+    "correctCount": 12,
+    "errorRate": 0.0,
+    "firstTokenLatency": {
+      "count": 12,
+      "minMs": 354.4,
+      "meanMs": 415.57,
+      "p50Ms": 372.02,
+      "p95Ms": 601.91,
+      "p99Ms": 601.91,
+      "maxMs": 601.91
+    },
+    "totalLatency": {
+      "count": 12,
+      "minMs": 415.36,
+      "meanMs": 470.54,
+      "p50Ms": 428.45,
+      "p95Ms": 644.3,
+      "p99Ms": 644.3,
+      "maxMs": 644.3
+    },
+    "results": [
+      {
+        "status": 200,
+        "firstTokenMs": 506.08,
+        "totalMs": 558.61,
+        "tokenChars": 72,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The structured policy release code is MD-4821. A release requires an[1]。",
+        "expected": "MD-4821",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 546.16,
+        "totalMs": 597.02,
+        "tokenChars": 78,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "Database recovery；Monthly；DOCX-5932[1]。",
+        "expected": "DOCX-5932",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 601.91,
+        "totalMs": 644.3,
+        "tokenChars": 42,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The native PDF audit code is PDF-6843.[1]。",
+        "expected": "PDF-6843",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 365.41,
+        "totalMs": 439.13,
+        "tokenChars": 52,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The scanned document emergency code is OCR-7319.[1]。",
+        "expected": "OCR-7319",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 379.09,
+        "totalMs": 445.85,
+        "tokenChars": 72,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The structured policy release code is MD-4821. A release requires an[1]。",
+        "expected": "MD-4821",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 367.51,
+        "totalMs": 435.58,
+        "tokenChars": 78,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "Database recovery；Monthly；DOCX-5932[1]。",
+        "expected": "DOCX-5932",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 366.85,
+        "totalMs": 415.36,
+        "tokenChars": 42,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The native PDF audit code is PDF-6843.[1]。",
+        "expected": "PDF-6843",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 375.18,
+        "totalMs": 416.0,
+        "tokenChars": 52,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The scanned document emergency code is OCR-7319.[1]。",
+        "expected": "OCR-7319",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 387.6,
+        "totalMs": 428.45,
+        "tokenChars": 72,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The structured policy release code is MD-4821. A release requires an[1]。",
+        "expected": "MD-4821",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 354.4,
+        "totalMs": 419.79,
+        "tokenChars": 78,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "Database recovery；Monthly；DOCX-5932[1]。",
+        "expected": "DOCX-5932",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 372.02,
+        "totalMs": 422.99,
+        "tokenChars": 42,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The native PDF audit code is PDF-6843.[1]。",
+        "expected": "PDF-6843",
+        "correct": true,
+        "passed": true
+      },
+      {
+        "status": 200,
+        "firstTokenMs": 364.58,
+        "totalMs": 423.4,
+        "tokenChars": 52,
+        "events": [
+          "conversation",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "status",
+          "token",
+          "replace",
+          "sources",
+          "done"
+        ],
+        "error": null,
+        "answer": "The scanned document emergency code is OCR-7319.[1]。",
+        "expected": "OCR-7319",
+        "correct": true,
+        "passed": true
+      }
+    ]
+  },
+  "documentCleanup": [
+    {
+      "documentId": 48,
+      "status": 204
+    },
+    {
+      "documentId": 50,
+      "status": 204
+    },
+    {
+      "documentId": 49,
+      "status": 204
+    },
+    {
+      "documentId": 51,
+      "status": 204
+    }
+  ],
+  "finishedAt": "2026-07-19T21:08:27.338014+08:00",
+  "passed": true,
+  "failedTests": []
+}

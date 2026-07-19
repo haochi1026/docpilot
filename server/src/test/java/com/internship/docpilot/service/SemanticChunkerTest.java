@@ -42,4 +42,15 @@ class SemanticChunkerTest {
     assertTrue(chunks.stream().anyMatch(item -> Integer.valueOf(2).equals(item.getPageNo())));
     assertTrue(chunks.stream().allMatch(item -> item.getTokenCount() > 0));
   }
+
+  @Test
+  void preservesLineBreaksInsteadOfReplacingThemWithLetterN() {
+    SemanticChunker chunker = new SemanticChunker(new TokenEstimator(), 80, 12);
+    List<DocumentChunkDraft> chunks =
+        chunker.chunk(List.of(new PageText(1, "Release policy\r\n\r\nCode MD-4821\r\nEvidence required", false)));
+
+    String combined = chunks.stream().map(DocumentChunkDraft::getContent).reduce("", (a, b) -> a + b);
+    assertTrue(combined.contains("\n"));
+    assertFalse(combined.contains("policynnCode"));
+  }
 }

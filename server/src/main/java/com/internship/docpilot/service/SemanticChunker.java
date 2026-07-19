@@ -132,8 +132,8 @@ public class SemanticChunker {
   private String normalize(String value) {
     return value.replace('\u0000', ' ')
         .replaceAll("[ \\t]+", " ")
-        .replaceAll("\\r\\n?", "\\n")
-        .replaceAll("\\n{3,}", "\\n\\n")
+        .replaceAll("\\r\\n?", "\n")
+        .replaceAll("\\n{3,}", "\n\n")
         .trim();
   }
 

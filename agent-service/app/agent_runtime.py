@@ -30,7 +30,7 @@ SYSTEM_PROMPT = """你是 DocPilot 的知识库与文档运维助手。
 当用户询问文档为什么检索不到、是否入库成功或能否重新处理时，先列出文档并读取诊断状态；只有状态为 FAILED 或 PARTIAL 且用户有管理权限时，才建议重新解析。
 只能在当前登录用户的权限范围内调用工具。知识库 ACL、文档状态条件更新、Outbox 入队和解析幂等由 Java 服务确定，不得以模型推测替代业务校验。
 检索、列表和诊断工具可以直接执行；重新解析会修改文档状态并发布异步任务，必须展示 document_id、文件名和失败原因，并获得用户批准后才能继续。
-工具失败时解释可恢复原因，不得暴露内部密钥、堆栈或服务地址。回答使用中文，先给结论，再给必要依据。"""
+工具失败时解释可恢复原因，不得暴露内部密钥、堆栈或服务地址。回答使用中文，先直接回答用户所问实体，再给必要依据；不要生成来源没有直接支持的标题、引言或建议。"""
 
 WRITE_TOOLS = {"retry_document_parsing"}
 
@@ -44,6 +44,9 @@ class DocPilotState(MessagesState):
     policy_decision: str
     verification: str
     evidence_items: list[dict[str, Any]]
+    retrieval_queries: list[str]
+    retrieval_round: int
+    refinement_attempted: bool
 
 
 class AgentRuntime:
@@ -77,7 +80,9 @@ class AgentRuntime:
     def _build_graph(self, checkpointer: Any) -> Any:
         builder = StateGraph(DocPilotState, context_schema=AgentContext)
         builder.add_node("route_intent", self._route_intent)
+        builder.add_node("plan_knowledge_query", self._plan_knowledge_query)
         builder.add_node("plan_required_retrieval", self._plan_required_retrieval)
+        builder.add_node("plan_refined_retrieval", self._plan_refined_retrieval)
         builder.add_node("plan_document_operation", self._plan_document_operation)
         builder.add_node("advance_document_operation", self._advance_document_operation)
         builder.add_node("call_model", self._call_model)
@@ -92,12 +97,14 @@ class AgentRuntime:
             "route_intent",
             self._after_route,
             {
-                "retrieve": "plan_required_retrieval",
+                "retrieve": "plan_knowledge_query",
                 "document": "plan_document_operation",
                 "model": "call_model",
             },
         )
+        builder.add_edge("plan_knowledge_query", "plan_required_retrieval")
         builder.add_edge("plan_required_retrieval", "execute_tools")
+        builder.add_edge("plan_refined_retrieval", "execute_tools")
         builder.add_edge("plan_document_operation", "policy_gate")
         builder.add_conditional_edges(
             "call_model",
@@ -117,6 +124,7 @@ class AgentRuntime:
                 "model": "call_model",
                 "document": "advance_document_operation",
                 "guard": "guard_answer",
+                "refine": "plan_refined_retrieval",
                 "end": END,
             },
         )
@@ -138,7 +146,9 @@ class AgentRuntime:
     def _plan_required_retrieval(
         self, state: DocPilotState, runtime: Runtime[AgentContext]
     ) -> dict[str, Any]:
-        query = _retrieval_query(_last_user_text(state))
+        queries = list(state.get("retrieval_queries", [])) or [
+            _retrieval_query(_last_user_text(state))
+        ]
         runtime.stream_writer({"status": "知识问答已进入强制检索阶段"})
         return {
             "messages": [
@@ -151,9 +161,42 @@ class AgentRuntime:
                             "id": f"required-search-{uuid.uuid4()}",
                             "type": "tool_call",
                         }
+                        for query in queries[:3]
                     ],
                 )
-            ]
+            ],
+            "retrieval_round": 1,
+        }
+
+    def _plan_knowledge_query(
+        self, state: DocPilotState, runtime: Runtime[AgentContext]
+    ) -> dict[str, Any]:
+        question = _last_user_text(state)
+        queries = _decompose_retrieval_queries(question)
+        runtime.stream_writer(
+            {"status": f"已生成 {len(queries)} 个受限检索子问题"}
+        )
+        return {
+            "retrieval_queries": queries,
+            "retrieval_round": 0,
+            "refinement_attempted": False,
+        }
+
+    def _plan_refined_retrieval(
+        self, state: DocPilotState, runtime: Runtime[AgentContext]
+    ) -> dict[str, Any]:
+        query = _rewrite_retrieval_query(state)
+        runtime.stream_writer({"status": "首轮证据不足，正在执行一次有界查询改写"})
+        return {
+            "messages": [
+                AIMessage(
+                    content="",
+                    tool_calls=[_tool_call("search_knowledge_base", {"query": query, "top_k": 6})],
+                )
+            ],
+            "retrieval_queries": [query],
+            "retrieval_round": 2,
+            "refinement_attempted": True,
         }
 
     def _route_intent(
@@ -218,6 +261,9 @@ class AgentRuntime:
             "policy_decision": "none",
             "verification": "pending",
             "evidence_items": list(state.get("evidence_items", [])),
+            "retrieval_queries": [],
+            "retrieval_round": 0,
+            "refinement_attempted": False,
         }
 
     def _plan_document_operation(
@@ -501,6 +547,22 @@ class AgentRuntime:
                 "verification": "write_completed",
                 "evidence_items": list(runtime.context.evidence.items),
             }
+        if (
+            state.get("route") == "knowledge_answer"
+            and runtime.context.evidence.items
+            and _is_simple_fact_question(_last_user_text(state))
+        ):
+            extracted = _extract_evidence_bound_answer(
+                _last_user_text(state), runtime.context.evidence.items
+            )
+            if extracted:
+                runtime.stream_writer({"status": "证据已满足简单事实问答，跳过生成式改写"})
+                return {
+                    "messages": [AIMessage(content=extracted)],
+                    "tool_calls": total,
+                    "verification": "extractive_answer_ready",
+                    "evidence_items": list(runtime.context.evidence.items),
+                }
         return {
             "tool_calls": total,
             "verification": verification,
@@ -510,8 +572,13 @@ class AgentRuntime:
     def _after_verification(self, state: DocPilotState) -> str:
         if state.get("verification") in {"budget_exhausted", "write_completed"}:
             return "end"
-        if state.get("route") == "knowledge_answer" and not state.get("evidence_items"):
-            return "guard"
+        if state.get("route") == "knowledge_answer":
+            if state.get("verification") == "extractive_answer_ready":
+                return "guard"
+            if not state.get("evidence_items"):
+                if not bool(state.get("refinement_attempted", False)):
+                    return "refine"
+                return "guard"
         if state.get("route") == "document_diagnosis":
             return "document"
         return "model"
@@ -530,6 +597,14 @@ class AgentRuntime:
             }
         if state.get("route") == "knowledge_answer":
             answer = _last_assistant_text(state)
+            extracted = _extract_evidence_bound_answer(
+                _last_user_text(state), runtime.context.evidence.items
+            )
+            if _answer_is_incomplete(_last_user_text(state), answer) and extracted:
+                return {
+                    "messages": [AIMessage(content=extracted)],
+                    "verification": "evidence_extract_fallback",
+                }
             citation_ids = {int(value) for value in re.findall(r"\[(\d+)\]", answer)}
             valid_ids = set(range(1, len(runtime.context.evidence.items) + 1))
             if (
@@ -586,9 +661,6 @@ class AgentRuntime:
                         input_data={"source_count": len(valid_ids)},
                         error=str(exc),
                     )
-                extracted = _extract_evidence_bound_answer(
-                    _last_user_text(state), runtime.context.evidence.items
-                )
                 if extracted:
                     return {
                         "messages": [AIMessage(content=extracted)],
@@ -647,7 +719,7 @@ class AgentRuntime:
                 "role": request.role,
                 "checkpoint_backend": self.settings.checkpoint_backend,
                 "model": self.settings.ollama_model,
-                "prompt_version": "docpilot-agent-v2",
+                "prompt_version": "docpilot-agent-v3-evidence-planner",
                 "graph": "explicit-state-graph",
             },
         )
@@ -662,6 +734,7 @@ class AgentRuntime:
             approval_token=request.approval_token,
         )
         config = {"configurable": {"thread_id": request.thread_id}}
+        prior_tool_call_ids: set[str] = set()
         trace_finished = False
         try:
             with self.checkpoints.open() as checkpointer:
@@ -700,6 +773,7 @@ class AgentRuntime:
                         )
                         trace_finished = True
                         return
+                    prior_tool_call_ids = _tool_call_ids(existing.values)
                     prior_messages = [] if existing.values else request.history
                     graph_input = {
                         "messages": prior_messages
@@ -736,7 +810,9 @@ class AgentRuntime:
                 interrupts = _interrupts(snapshot)
                 if interrupts:
                     payload = [getattr(item, "value", item) for item in interrupts]
-                    tool_calls = _tool_trace(snapshot.values)
+                    tool_calls = _tool_trace(
+                        snapshot.values, exclude_ids=prior_tool_call_ids
+                    )
                     yield self._event(
                         "approval",
                         {
@@ -756,7 +832,9 @@ class AgentRuntime:
                     return
 
                 answer = _last_assistant_text(snapshot.values)
-                tool_calls = _tool_trace(snapshot.values)
+                tool_calls = _tool_trace(
+                    snapshot.values, exclude_ids=prior_tool_call_ids
+                )
                 yield self._event("replace", answer)
                 yield self._event("sources", context.evidence.items)
                 yield self._event(
@@ -990,17 +1068,23 @@ def _format_document_diagnostics(payload: Any) -> str:
     return text
 
 
-def _tool_trace(state: Any) -> list[dict[str, Any]]:
+def _tool_trace(
+    state: Any, *, exclude_ids: set[str] | None = None
+) -> list[dict[str, Any]]:
     messages = state.get("messages", []) if isinstance(state, dict) else []
+    excluded = exclude_ids or set()
     results: dict[str, str] = {}
     calls: list[dict[str, Any]] = []
     for message in messages:
         if isinstance(message, ToolMessage):
             results[str(message.tool_call_id)] = "ERROR" if "执行失败" in str(message.content) else "SUCCESS"
         for call in getattr(message, "tool_calls", []) or []:
+            call_id = str(call.get("id", ""))
+            if call_id in excluded:
+                continue
             calls.append(
                 {
-                    "id": str(call.get("id", "")),
+                    "id": call_id,
                     "name": str(call.get("name", "")),
                     "args": call.get("args", {}),
                 }
@@ -1008,6 +1092,14 @@ def _tool_trace(state: Any) -> list[dict[str, Any]]:
     for call in calls:
         call["status"] = results.get(call["id"], "PLANNED")
     return calls
+
+
+def _tool_call_ids(state: Any) -> set[str]:
+    return {
+        str(call.get("id", ""))
+        for call in _tool_trace(state)
+        if str(call.get("id", ""))
+    }
 
 
 def _resume_command(decision: str) -> Command:
@@ -1024,9 +1116,54 @@ def _retrieval_query(value: str) -> str:
         "麻烦帮我查询",
         "帮我查询",
         "帮我查一下",
+        "请基于证据回答",
+        "请给出引用",
+        "并给出引用",
     ):
         query = query.replace(phrase, "")
     return query.strip(" ：:，,") or value.strip()
+
+
+def _decompose_retrieval_queries(question: str) -> list[str]:
+    """Create at most three literal subqueries without adding outside facts."""
+    normalized = _retrieval_query(question)
+    parts = [
+        item.strip(" ，,：:")
+        for item in re.split(r"(?:分别|以及|并且|同时|另外|；|;)", normalized)
+        if item.strip(" ，,：:")
+    ]
+    # Short connector fragments are safer as one query because splitting can
+    # remove the entity shared by both clauses.
+    if len(parts) <= 1 or any(len(item) < 5 for item in parts):
+        return [normalized]
+    unique: list[str] = []
+    for item in parts:
+        if item not in unique:
+            unique.append(item)
+    return unique[:3]
+
+
+def _rewrite_retrieval_query(state: Any) -> str:
+    """Perform one bounded rewrite, using only text already present in the thread."""
+    current = _retrieval_query(_last_user_text(state))
+    messages = state.get("messages", []) if isinstance(state, dict) else []
+    previous = ""
+    seen_current = False
+    for message in reversed(messages):
+        if getattr(message, "type", "") in {"human", "user"} or (
+            isinstance(message, dict) and message.get("role") == "user"
+        ):
+            value = _message_text(message)
+            if not seen_current:
+                seen_current = True
+            elif value.strip():
+                previous = _retrieval_query(value)
+                break
+    if previous and re.search(r"(?:刚才|那个|那|它|上述|前面)", current):
+        return f"{previous} {current}"[:240]
+    compact = re.sub(r"(?:是什么|有哪些|多少|如何|怎么|是否|请问)", " ", current)
+    compact = re.sub(r"\s+", " ", compact).strip(" ，,：:")
+    return (compact or current)[:240]
 
 
 def _claims_supported_by_citations(
@@ -1044,6 +1181,8 @@ def _claims_supported_by_citations(
         return True
     sentences = [item.strip() for item in re.split(r"(?<=[。！？!?；;])|\n+", answer)]
     for sentence in sentences:
+        if _is_markdown_scaffolding(sentence):
+            continue
         plain = re.sub(r"\[\d+\]", "", sentence).strip(" ，,。；;：:")
         if len(plain) < 6:
             continue
@@ -1055,6 +1194,17 @@ def _claims_supported_by_citations(
         if any(fact not in cited for fact in numeric_facts):
             return False
     return True
+
+
+def _is_markdown_scaffolding(sentence: str) -> bool:
+    plain = sentence.strip()
+    if not plain:
+        return True
+    if re.fullmatch(r"#{1,6}\s*[^。！？!?；;]{1,32}", plain):
+        return True
+    if re.fullmatch(r"(?:[-*]>?\s*)?(?:结论|依据|引用|来源|说明)\s*[:：]?", plain):
+        return True
+    return False
 
 
 def _iterate_in_context(
@@ -1071,45 +1221,125 @@ def _iterate_in_context(
 def _extract_evidence_bound_answer(
     question: str, evidence: list[dict[str, Any]]
 ) -> str | None:
-    """Return one verbatim evidence sentence when it directly matches the question.
-
-    This is deliberately extractive: it never asks a model to paraphrase and it
-    never combines facts across chunks.  It is only used after the normal answer
-    or citation-repair path fails, so a weak lexical match still results in the
-    existing safe refusal.
-    """
+    """Return a compact, source-local evidence window without model paraphrasing."""
     query_units = _lexical_units(question)
-    if len(query_units) < 3:
+    if len(query_units) < 2:
         return None
 
     best: tuple[float, int, str] | None = None
     for source_id, item in enumerate(evidence, start=1):
         content = str(item.get("content", "")).strip()
-        for raw_sentence in re.split(r"(?<=[。！？!?；;])|\n+", content):
-            sentence = re.sub(r"\s+", " ", raw_sentence).strip()
-            if len(sentence) < 6 or len(sentence) > 240:
+        retrieval_score = float(item.get("score", 0.0) or 0.0)
+        for sentence in _evidence_windows(content):
+            if len(sentence) < 4 or len(sentence) > 360:
                 continue
             sentence_units = _lexical_units(sentence)
             if not sentence_units:
                 continue
-            coverage = len(query_units & sentence_units) / len(query_units)
-            precision = len(query_units & sentence_units) / len(sentence_units)
-            score = 0.8 * coverage + 0.2 * precision
+            overlap = query_units & sentence_units
+            coverage = len(overlap) / len(query_units)
+            precision = len(overlap) / len(sentence_units)
+            code_bonus = 0.0
+            if re.search(r"(?:代码|编号|版本|code)", question, re.IGNORECASE) and re.search(
+                r"\b[A-Z][A-Z0-9]{1,15}(?:-[A-Z0-9]+)+\b", sentence
+            ):
+                code_bonus = 0.32
+                code_match = re.search(
+                    r"\b[A-Z][A-Z0-9]{1,15}(?:-[A-Z0-9]+)+\b", sentence
+                )
+                query_positions = [
+                    sentence.lower().find(unit.lower())
+                    for unit in query_units
+                    if len(unit) > 2 and sentence.lower().find(unit.lower()) >= 0
+                ]
+                if code_match and query_positions:
+                    # Flattened table rows are ordered entity -> cadence -> code.
+                    # Prefer a code following the matched entity, and penalize a
+                    # code leaked from the preceding row.
+                    code_bonus += 0.14 if min(query_positions) < code_match.start() else -0.14
+            score = 0.74 * coverage + 0.16 * precision + code_bonus
+            score += min(max(retrieval_score, 0.0), 1.0) * 0.05
             candidate = (score, source_id, sentence)
             if best is None or candidate[0] > best[0]:
                 best = candidate
 
-    if best is None or best[0] < 0.46:
+    if best is None or best[0] < 0.22:
         return None
     _, source_id, sentence = best
-    sentence = sentence.rstrip("。！？!?；; ")
+    sentence = re.sub(r"\s+", " ", sentence).strip().rstrip("。！？!?；;. ")
     return f"{sentence}[{source_id}]。"
 
 
 def _lexical_units(value: str) -> set[str]:
-    normalized = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff]", "", value).lower()
+    english_stop = {
+        "a", "an", "and", "are", "as", "at", "be", "for", "from", "how",
+        "in", "is", "it", "of", "on", "the", "to", "what", "which", "with",
+    }
+    english = {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*", value)
+        if len(token) > 1 and token.lower() not in english_stop
+    }
+    normalized = re.sub(r"[^\u4e00-\u9fff]", "", value)
     stop_chars = set("的是了在和与为于吗呢请问多少什么如何怎么是否")
     chars = [char for char in normalized if char not in stop_chars]
     if len(chars) < 2:
-        return set(chars)
-    return {"".join(chars[index : index + 2]) for index in range(len(chars) - 1)}
+        return english | set(chars)
+    return english | {
+        "".join(chars[index : index + 2]) for index in range(len(chars) - 1)
+    }
+
+
+def _evidence_windows(content: str) -> list[str]:
+    # Some extractors persist escaped line separators in a chunk. Normalize
+    # those before constructing source-local windows.
+    content = content.replace("\\r\\n", "\n").replace("\\n", "\n")
+    lines: list[str] = []
+    for raw in content.splitlines():
+        cleaned = re.sub(r"^\s*(?:#{1,6}|[-*+]|\d+[.)])\s*", "", raw)
+        cleaned = re.sub(r"[`*_>|]", "", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if cleaned:
+            lines.extend(
+                item.strip()
+                for item in re.split(
+                    r"(?<=[。！？!?；;])|(?<=[.])(?=\s+[A-Z])", cleaned
+                )
+                if item.strip()
+            )
+    windows: list[str] = []
+    for start in range(len(lines)):
+        for size in range(1, 4):
+            selected = lines[start : start + size]
+            if len(selected) != size:
+                continue
+            candidate = "；".join(item.rstrip("。！？!?；; ") for item in selected)
+            if len(candidate) <= 360:
+                windows.append(candidate)
+    return windows
+
+
+def _is_simple_fact_question(question: str) -> bool:
+    normalized = question.strip()
+    if len(normalized) > 100:
+        return False
+    if re.search(r"(?:比较|对比|分析|综合|为什么|分别说明|跨文档)", normalized):
+        return False
+    if re.search(r"(?:忽略.*规则|绕过.*审批|输出.*密钥|执行.*指令)", normalized):
+        return False
+    return True
+
+
+def _answer_is_incomplete(question: str, answer: str) -> bool:
+    plain = re.sub(r"\[\d+\]", "", answer).strip()
+    if not plain:
+        return True
+    if re.search(r"(?:必须附|哪些材料|什么材料)", question) and not re.search(
+        r"(?:发票|审批|材料.{2,})", plain
+    ):
+        return True
+    if re.search(r"(?:代码|编号|版本号|code)", question, re.IGNORECASE) and not re.search(
+        r"\b[A-Z][A-Z0-9]{1,15}(?:-[A-Z0-9]+)+\b", plain
+    ):
+        return True
+    return bool(re.search(r"(?:以下|如下|相关内容|如上|前述)[：:]?\s*$", plain))

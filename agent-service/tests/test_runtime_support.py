@@ -8,7 +8,15 @@ import httpx
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
-from app.agent_runtime import AgentRuntime, _iterate_in_context, _resume_command
+from app.agent_runtime import (
+    AgentRuntime,
+    _claims_supported_by_citations,
+    _decompose_retrieval_queries,
+    _extract_evidence_bound_answer,
+    _iterate_in_context,
+    _resume_command,
+    _tool_trace,
+)
 from app.checkpoint import CheckpointProvider
 from app.tools import AgentContext
 from app.tracing import TraceClient
@@ -31,7 +39,9 @@ def test_runtime_installs_model_and_tool_call_limits() -> None:
         nodes = set(graph.nodes)
     assert {
         "route_intent",
+        "plan_knowledge_query",
         "plan_required_retrieval",
+        "plan_refined_retrieval",
         "plan_document_operation",
         "advance_document_operation",
         "call_model",
@@ -44,6 +54,78 @@ def test_runtime_installs_model_and_tool_call_limits() -> None:
     assert runtime.settings.tool_run_limit == 12
     assert all(tool.handle_tool_error for tool in runtime.tools)
     runtime.close()
+
+
+def test_query_planner_is_bounded_and_does_not_invent_terms() -> None:
+    queries = _decompose_retrieval_queries("分别查询差旅时限以及所需材料；再查询版本号")
+    assert 1 <= len(queries) <= 3
+    assert all(term in "分别查询差旅时限以及所需材料；再查询版本号" for term in queries)
+
+
+def test_extractive_answer_joins_adjacent_table_lines_and_prefers_code() -> None:
+    answer = _extract_evidence_bound_answer(
+        "What is the database recovery exercise code?",
+        [
+            {
+                "chunkId": 7,
+                "documentName": "operations.docx",
+                "content": "Exercise\nCadence\nCode\nDatabase recovery\nMonthly\nDOCX-5932",
+                "score": 0.91,
+            }
+        ],
+    )
+    assert answer is not None
+    assert "Database recovery" in answer
+    assert "DOCX-5932" in answer
+    assert answer.endswith("[1]。")
+
+
+def test_extractive_answer_does_not_keep_unrelated_trailing_sentence() -> None:
+    answer = _extract_evidence_bound_answer(
+        "What is the structured policy release code?",
+        [
+            {
+                "content": "The structured policy release code is MD-4821. A release requires an\nimmutable dataset.",
+                "score": 0.9,
+            }
+        ],
+    )
+    assert answer == "The structured policy release code is MD-4821[1]。"
+
+
+def test_claim_guard_ignores_markdown_heading_but_not_uncited_claim() -> None:
+    evidence = [{"content": "连续失败达到阈值后应熔断。"}]
+    assert _claims_supported_by_citations("## 结论\n达到阈值后应熔断[1]。", evidence)
+    assert not _claims_supported_by_citations("## 结论\n达到阈值后应熔断[1]。\n系统会自动恢复。", evidence)
+
+
+def test_tool_trace_can_exclude_prior_turn_calls() -> None:
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "list_documents", "args": {}, "id": "old", "type": "tool_call"}
+                ],
+            ),
+            ToolMessage(content="[]", tool_call_id="old", name="list_documents"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "get_document_diagnostics",
+                        "args": {"document_id": 9},
+                        "id": "new",
+                        "type": "tool_call",
+                    }
+                ],
+            ),
+            ToolMessage(content="{}", tool_call_id="new", name="get_document_diagnostics"),
+        ]
+    }
+    assert [item["name"] for item in _tool_trace(state, exclude_ids={"old"})] == [
+        "get_document_diagnostics"
+    ]
 
 
 def test_reject_resume_command_explicitly_stops_bypass() -> None:
@@ -238,7 +320,7 @@ def test_graph_rejects_answer_with_out_of_range_citation(tmp_path) -> None:
     runtime.model = _ScriptedModel([AIMessage(content="需要审批[9]。")])
     with runtime.checkpoints.open() as saver:
         result = runtime._build_graph(saver).invoke(
-            {"messages": [{"role": "user", "content": "审批规则是什么？"}]},
+                {"messages": [{"role": "user", "content": "请分析审批规则为什么需要这样设计？"}]},
             config={"configurable": {"thread_id": "citation-thread"}},
             context=_context("citation-thread"),
         )
@@ -267,7 +349,7 @@ def test_graph_repairs_missing_citation_without_new_tool_call(tmp_path) -> None:
     )
     with runtime.checkpoints.open() as saver:
         result = runtime._build_graph(saver).invoke(
-            {"messages": [{"role": "user", "content": "连续工具失败后怎么办？"}]},
+                {"messages": [{"role": "user", "content": "请分析连续工具失败后为什么需要熔断？"}]},
             config={"configurable": {"thread_id": "citation-repair-thread"}},
             context=_context("citation-repair-thread"),
         )
@@ -294,7 +376,7 @@ def test_graph_falls_back_to_verbatim_evidence_for_unsupported_tail(tmp_path) ->
     )
     with runtime.checkpoints.open() as saver:
         result = runtime._build_graph(saver).invoke(
-            {"messages": [{"role": "user", "content": "北京地区住宿标准是多少？"}]},
+                {"messages": [{"role": "user", "content": "请分析北京地区住宿标准是多少以及依据。"}]},
             config={"configurable": {"thread_id": "extractive-fallback-thread"}},
             context=_context("extractive-fallback-thread"),
         )
