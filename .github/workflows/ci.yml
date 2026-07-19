@@ -116,19 +116,19 @@ jobs:
       - run: docker build -t docpilot-server ./server
       - run: docker build -t docpilot-agent ./agent-service
       - run: docker build -t docpilot-client ./client
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: docpilot-server
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: docpilot-agent
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: docpilot-client
           severity: HIGH,CRITICAL
