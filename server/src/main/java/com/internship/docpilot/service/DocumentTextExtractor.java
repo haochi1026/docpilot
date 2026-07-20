@@ -6,11 +6,12 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
-import org.apache.pdfbox.io.MemoryUsageSetting;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
@@ -56,28 +57,33 @@ public class DocumentTextExtractor {
   private ExtractionResult extractPdf(InputStream input) throws Exception {
     List<PageText> pages = new ArrayList<PageText>();
     boolean usedOcr = false;
-    try (PDDocument pdf =
-        PDDocument.load(input, MemoryUsageSetting.setupTempFileOnly())) {
-      PDFTextStripper stripper = new PDFTextStripper();
-      PDFRenderer renderer = ocrEnabled ? new PDFRenderer(pdf) : null;
-      int ocrPages = 0;
-      for (int pageIndex = 0; pageIndex < pdf.getNumberOfPages(); pageIndex++) {
-        stripper.setStartPage(pageIndex + 1);
-        stripper.setEndPage(pageIndex + 1);
-        String text = normalize(stripper.getText(pdf));
-        boolean pageOcr = false;
-        if (text.replaceAll("\\s+", "").length() < minPageChars && ocrEnabled) {
-          if (ocrPages >= maxOcrPages) {
-            throw new IllegalStateException("扫描版 PDF 超过单文档 OCR 页数上限 " + maxOcrPages);
+    Path pdfPath = Files.createTempFile("docpilot-pdf-", ".pdf");
+    try {
+      Files.copy(input, pdfPath, StandardCopyOption.REPLACE_EXISTING);
+      try (PDDocument pdf = Loader.loadPDF(pdfPath.toFile())) {
+        PDFTextStripper stripper = new PDFTextStripper();
+        PDFRenderer renderer = ocrEnabled ? new PDFRenderer(pdf) : null;
+        int ocrPages = 0;
+        for (int pageIndex = 0; pageIndex < pdf.getNumberOfPages(); pageIndex++) {
+          stripper.setStartPage(pageIndex + 1);
+          stripper.setEndPage(pageIndex + 1);
+          String text = normalize(stripper.getText(pdf));
+          boolean pageOcr = false;
+          if (text.replaceAll("\\s+", "").length() < minPageChars && ocrEnabled) {
+            if (ocrPages >= maxOcrPages) {
+              throw new IllegalStateException("扫描版 PDF 超过单文档 OCR 页数上限 " + maxOcrPages);
+            }
+            BufferedImage image = renderer.renderImageWithDPI(pageIndex, 200, ImageType.RGB);
+            text = normalize(runTesseract(image));
+            pageOcr = true;
+            usedOcr = true;
+            ocrPages++;
           }
-          BufferedImage image = renderer.renderImageWithDPI(pageIndex, 200, ImageType.RGB);
-          text = normalize(runTesseract(image));
-          pageOcr = true;
-          usedOcr = true;
-          ocrPages++;
+          pages.add(new PageText(pageIndex + 1, text, pageOcr));
         }
-        pages.add(new PageText(pageIndex + 1, text, pageOcr));
       }
+    } finally {
+      Files.deleteIfExists(pdfPath);
     }
     return new ExtractionResult(pages, usedOcr);
   }
