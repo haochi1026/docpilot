@@ -1,0 +1,28 @@
+# Production-dependency acceptance overlay.
+# Combine with docker-compose.smoke.yml and docker-compose.rocketmq.yml.
+# It intentionally publishes the server only on localhost for the host-side
+# acceptance scripts and keeps all data in disposable volumes.
+services:
+  server:
+    environment:
+      APP_ENV: development
+      SPRING_PROFILES_ACTIVE: demo
+      QUEUE_MODE: rocketmq
+      ROCKETMQ_NAMESERVER: namesrv:9876
+      VECTOR_STORE_ENABLED: "true"
+      VECTOR_DB_URL: jdbc:postgresql://vector-postgres:5432/docpilot_vector
+      VECTOR_DB_USERNAME: docpilot_vector
+      VECTOR_DB_PASSWORD: smoke-vector-password
+      OCR_ENABLED: "true"
+      OCR_MIN_CONFIDENCE: "45"
+      EMBEDDING_CONNECT_TIMEOUT_MS: "2000"
+      EMBEDDING_READ_TIMEOUT_MS: "60000"
+    ports:
+      - "127.0.0.1:${DOCPILOT_ACCEPTANCE_PORT:-29081}:8080"
+    depends_on:
+      namesrv:
+        condition: service_started
+      broker:
+        condition: service_started
+      vector-postgres:
+        condition: service_healthy

@@ -4,7 +4,7 @@ This FastAPI service adds a LangChain/LangGraph orchestration layer while keepin
 
 ## Runtime responsibilities
 
-- LangChain supplies ChatOllama messages and tools; an explicit LangGraph state graph has a required-retrieval branch and a deterministic document-operations branch. The latter enforces diagnose → state check → write plan → HITL → execute instead of asking the model to invent a transition.
+- LangChain supplies ChatOllama messages and tools; an explicit LangGraph state graph has a required-retrieval branch and a deterministic document-operations branch. The latter supports a persisted multi-document recovery plan and enforces list → diagnose → state check → one-document write plan → HITL → verify → next item → summary. Every item receives an independent approval, and a rejected/failed item is recorded without losing prior progress.
 - LangGraph checkpoints persist state by `thread_id`: SQLite is available for local development; PostgreSQL is required in production mode.
 - `ModelCallLimitMiddleware` and `ToolCallLimitMiddleware` cap a single run and prevent unbounded loops.
 - `policy_gate` interrupts `retry_document_parsing` before the Java write API is called. The Java service persists the approval record and issues a one-time HMAC-bound token after the user approves.

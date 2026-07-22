@@ -25,6 +25,7 @@ def test_production_agentops_requires_service_identity(
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("AGENT_SERVICE_KEY", "production-service-key")
     monkeypatch.setenv("DOCPILOT_INTERNAL_KEY", "production-internal-key")
+    monkeypatch.setenv("DOCPILOT_IDENTITY_TOKEN_SECRET", "docpilot-identity-secret")
     monkeypatch.setenv("CHECKPOINT_BACKEND", "postgres")
     monkeypatch.setenv("CHECKPOINT_DSN", "postgresql://agent:secret@postgres/agent")
     monkeypatch.setenv("AGENTOPS_ENABLED", "true")

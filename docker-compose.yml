@@ -54,6 +54,7 @@ services:
   server:
     build: ./server
     environment:
+      APP_ENV: ${APP_ENV:-development}
       DB_URL: jdbc:mysql://mysql:3306/docpilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
@@ -67,11 +68,15 @@ services:
       AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
       AI_API_KEY: ${AI_API_KEY:-ollama}
       AI_MODEL: ${AI_MODEL:-qwen3.5:2b}
+      AI_CONNECT_TIMEOUT_MS: ${AI_CONNECT_TIMEOUT_MS:-2000}
+      AI_READ_TIMEOUT_MS: ${AI_READ_TIMEOUT_MS:-180000}
       EMBEDDING_MODE: ${EMBEDDING_MODE:-local}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-ollama}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3-embedding:0.6b}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
+      EMBEDDING_CONNECT_TIMEOUT_MS: ${EMBEDDING_CONNECT_TIMEOUT_MS:-2000}
+      EMBEDDING_READ_TIMEOUT_MS: ${EMBEDDING_READ_TIMEOUT_MS:-60000}
       VECTOR_STORE_ENABLED: "true"
       VECTOR_DB_URL: jdbc:postgresql://vector-postgres:5432/docpilot_vector
       VECTOR_DB_USERNAME: docpilot_vector
@@ -83,6 +88,9 @@ services:
       RETRIEVAL_LEXICAL_WEIGHT: ${RETRIEVAL_LEXICAL_WEIGHT:-0.35}
       RETRIEVAL_VECTOR_WEIGHT: ${RETRIEVAL_VECTOR_WEIGHT:-0.65}
       LEXICAL_CANDIDATE_LIMIT: ${LEXICAL_CANDIDATE_LIMIT:-160}
+      RETRIEVAL_STRATEGY: ${RETRIEVAL_STRATEGY:-HYBRID_RERANK}
+      RERANK_CANDIDATE_LIMIT: ${RERANK_CANDIDATE_LIMIT:-24}
+      RERANK_WEIGHT: ${RERANK_WEIGHT:-0.25}
       CHUNK_MAX_TOKENS: ${CHUNK_MAX_TOKENS:-480}
       CHUNK_OVERLAP_TOKENS: ${CHUNK_OVERLAP_TOKENS:-60}
       OCR_ENABLED: ${OCR_ENABLED:-true}

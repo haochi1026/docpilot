@@ -1,0 +1,144 @@
+{
+  "runId": "20260722-185157-57587c",
+  "startedAt": "2026-07-22T18:51:57.712255+08:00",
+  "baseUrl": "http://127.0.0.1:29081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "local",
+    "aiModel": "未接入大模型",
+    "embeddingMode": "local",
+    "embeddingModel": "未使用 Embedding",
+    "retrievalMode": "字符词片检索",
+    "answerMode": "本地抽取式回答",
+    "agentEnabled": false,
+    "queueMode": "rocketmq"
+  },
+  "parameters": {
+    "uploads": 4,
+    "workers": 4,
+    "sizeKb": 64,
+    "chatConcurrency": 0,
+    "ollama": true
+  },
+  "ollamaConnectionTest": {
+    "status": 200,
+    "elapsedMs": 9613.82,
+    "data": {
+      "embeddingDimensions": 1024,
+      "chatReady": true,
+      "success": true
+    },
+    "raw": "{\"embeddingDimensions\":1024,\"chatReady\":true,\"success\":true}"
+  },
+  "activeSettings": {
+    "aiMode": "openai",
+    "aiBaseUrl": "http://host.docker.internal:11434/v1",
+    "aiModel": "qwen3.5:2b",
+    "embeddingMode": "openai",
+    "embeddingBaseUrl": "http://host.docker.internal:11434/v1",
+    "embeddingModel": "qwen3-embedding:0.6b"
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 4
+    },
+    "latency": {
+      "count": 4,
+      "minMs": 101.64,
+      "meanMs": 107.85,
+      "p50Ms": 106.87,
+      "p95Ms": 114.2,
+      "p99Ms": 114.2,
+      "maxMs": 114.2
+    },
+    "wallMs": 322.82,
+    "throughputPerSecond": 12.39,
+    "documentIds": [
+      1,
+      3,
+      2,
+      4
+    ],
+    "failedResponses": [],
+    "formats": {
+      "docx-table": 1,
+      "markdown": 1,
+      "native-pdf": 1,
+      "scanned-pdf-ocr": 1
+    }
+  },
+  "parse": {
+    "passed": true,
+    "terminalCount": 4,
+    "successCount": 4,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 4,
+      "minMs": 14727.74,
+      "meanMs": 14984.41,
+      "p50Ms": 14727.94,
+      "p95Ms": 15244.1,
+      "p99Ms": 15244.1,
+      "maxMs": 15244.1
+    },
+    "documents": {
+      "3": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 14727.74
+      },
+      "2": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 14727.94
+      },
+      "1": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 15244.1
+      },
+      "4": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 15237.87
+      }
+    }
+  },
+  "chat": {
+    "skipped": true,
+    "reason": "disabled or parsing failed"
+  },
+  "documentCleanup": [
+    {
+      "documentId": 1,
+      "status": 204
+    },
+    {
+      "documentId": 3,
+      "status": 204
+    },
+    {
+      "documentId": 2,
+      "status": 204
+    },
+    {
+      "documentId": 4,
+      "status": 204
+    }
+  ],
+  "settingsRestore": {
+    "status": 200,
+    "restored": true
+  },
+  "finishedAt": "2026-07-22T18:52:23.113821+08:00",
+  "passed": true,
+  "failedTests": []
+}

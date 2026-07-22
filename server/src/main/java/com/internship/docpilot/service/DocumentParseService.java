@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -98,7 +99,7 @@ public class DocumentParseService {
       ensureLease(documentId, jobId, leaseLost);
       Long kbId = ((Number) d.get("kb_id")).longValue();
       int revisionNo = ((Number) d.get("version")).intValue();
-      documents.replaceChunks(documentId, kbId, chunks, jobId);
+      replaceChunksWithRetry(documentId, kbId, chunks, jobId, leaseLost);
       boolean pdf = originalName.toLowerCase().endsWith(".pdf");
       String extractionMethod =
           extraction.isOcrUsed() ? "PDFBOX_OCR" : (pdf ? "PDFBOX" : "TIKA");
@@ -149,6 +150,35 @@ public class DocumentParseService {
   private void ensureLease(Long documentId, String jobId, AtomicBoolean leaseLost) {
     if (leaseLost.get() || !documents.touchLease(documentId, jobId, 30)) {
       throw new IllegalStateException("document parse lease lost");
+    }
+  }
+
+  private void replaceChunksWithRetry(
+      Long documentId,
+      Long kbId,
+      List<DocumentChunkDraft> chunks,
+      String jobId,
+      AtomicBoolean leaseLost) {
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        documents.replaceChunks(documentId, kbId, chunks, jobId);
+        return;
+      } catch (TransientDataAccessException transientFailure) {
+        if (attempt == 3) throw transientFailure;
+        ensureLease(documentId, jobId, leaseLost);
+        long backoffMillis = 50L * (1L << (attempt - 1));
+        log.warn(
+            "Transient database conflict while publishing document {} chunks; retry {}/3 after {} ms",
+            documentId,
+            attempt + 1,
+            backoffMillis);
+        try {
+          Thread.sleep(backoffMillis);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException("document chunk retry interrupted", interrupted);
+        }
+      }
     }
   }
 

@@ -23,41 +23,61 @@ public class RetrievalService {
   private final EmbeddingService embeddings;
   private final VectorStoreRepository vectors;
   private final TokenEstimator tokens;
+  private final RetrievalReranker reranker;
   private final double minimumScore;
   private final double minimumLexicalScore;
   private final double minimumVectorScore;
   private final double lexicalWeight;
   private final double vectorWeight;
   private final int lexicalCandidateLimit;
+  private final int rerankCandidateLimit;
+  private final double rerankWeight;
+  private final Strategy defaultStrategy;
 
   public RetrievalService(
       DocumentRepository documents,
       EmbeddingService embeddings,
       VectorStoreRepository vectors,
       TokenEstimator tokens,
+      RetrievalReranker reranker,
       @Value("${app.retrieval.min-score:0.20}") double minimumScore,
       @Value("${app.retrieval.min-lexical-score:0.05}") double minimumLexicalScore,
       @Value("${app.retrieval.min-vector-score:0.45}") double minimumVectorScore,
       @Value("${app.retrieval.lexical-weight:0.35}") double lexicalWeight,
       @Value("${app.retrieval.vector-weight:0.65}") double vectorWeight,
-      @Value("${app.retrieval.lexical-candidate-limit:160}") int lexicalCandidateLimit) {
+      @Value("${app.retrieval.lexical-candidate-limit:160}") int lexicalCandidateLimit,
+      @Value("${app.retrieval.rerank-candidate-limit:24}") int rerankCandidateLimit,
+      @Value("${app.retrieval.rerank-weight:0.25}") double rerankWeight,
+      @Value("${app.retrieval.strategy:HYBRID_RERANK}") String defaultStrategy) {
     this.documents = documents;
     this.embeddings = embeddings;
     this.vectors = vectors;
     this.tokens = tokens;
+    this.reranker = reranker;
     this.minimumScore = Math.max(0, Math.min(1, minimumScore));
     this.minimumLexicalScore = Math.max(0, Math.min(1, minimumLexicalScore));
     this.minimumVectorScore = Math.max(0, Math.min(1, minimumVectorScore));
     this.lexicalWeight = Math.max(0, lexicalWeight);
     this.vectorWeight = Math.max(0, vectorWeight);
     this.lexicalCandidateLimit = Math.max(20, lexicalCandidateLimit);
+    this.rerankCandidateLimit = Math.max(4, Math.min(100, rerankCandidateLimit));
+    this.rerankWeight = Math.max(0, Math.min(0.6, rerankWeight));
+    this.defaultStrategy = Strategy.parse(defaultStrategy);
   }
 
   public List<SearchHit> search(Long kbId, String question, int topK) {
+    return search(kbId, question, topK, defaultStrategy.name());
+  }
+
+  public List<SearchHit> search(Long kbId, String question, int topK, String requestedStrategy) {
+    Strategy strategy = Strategy.parse(requestedStrategy);
+    int boundedTopK = Math.max(1, Math.min(8, topK));
     List<RetrievalCandidate> lexical =
-        documents.lexicalCandidates(kbId, tokens.terms(question), lexicalCandidateLimit);
+        strategy == Strategy.VECTOR
+            ? Collections.emptyList()
+            : documents.lexicalCandidates(kbId, tokens.terms(question), lexicalCandidateLimit);
     List<RetrievalCandidate> semantic = Collections.emptyList();
-    if (embeddings.enabled() && vectors.enabled()) {
+    if (strategy != Strategy.LEXICAL && embeddings.enabled() && vectors.enabled()) {
       try {
         String activeModel = documents.activeEmbeddingModel(kbId, embeddings.getModel());
         semantic = vectors.search(kbId, activeModel, embeddings.embed(question, activeModel));
@@ -79,8 +99,10 @@ public class RetrievalService {
 
     boolean hasVector = !semantic.isEmpty();
     boolean hasLexical = !lexical.isEmpty();
-    double activeLexicalWeight = hasLexical ? lexicalWeight : 0;
-    double activeVectorWeight = hasVector ? vectorWeight : 0;
+    double activeLexicalWeight =
+        hasLexical ? (strategy == Strategy.LEXICAL ? 1.0 : lexicalWeight) : 0;
+    double activeVectorWeight =
+        hasVector ? (strategy == Strategy.VECTOR ? 1.0 : vectorWeight) : 0;
     double totalWeight = activeLexicalWeight + activeVectorWeight;
     if (totalWeight <= 0) return Collections.emptyList();
 
@@ -95,41 +117,74 @@ public class RetrievalService {
 
     List<Long> eligibleIds = new ArrayList<Long>();
     for (Map.Entry<Long, Score> entry : ranked) {
-      if (!eligible(entry.getValue())) continue;
+      if (!eligible(entry.getValue(), strategy)) continue;
       eligibleIds.add(entry.getKey());
-      if (eligibleIds.size() >= Math.max(topK * 3, topK)) break;
+      int candidateLimit =
+          strategy == Strategy.HYBRID_RERANK
+              ? Math.max(rerankCandidateLimit, boundedTopK)
+              : Math.max(boundedTopK * 3, boundedTopK);
+      if (eligibleIds.size() >= candidateLimit) break;
     }
     if (eligibleIds.isEmpty()) return Collections.emptyList();
 
     Map<Long, SearchHit> hits = documents.chunksByIds(eligibleIds);
     List<SearchHit> result = new ArrayList<SearchHit>();
     for (Map.Entry<Long, Score> entry : ranked) {
-      if (!eligible(entry.getValue())) continue;
+      if (!eligible(entry.getValue(), strategy)) continue;
       SearchHit hit = hits.get(entry.getKey());
       if (hit == null) continue;
       Score score = entry.getValue();
-      hit.setScore(score.fused);
+      double rerankScore =
+          strategy == Strategy.HYBRID_RERANK ? reranker.score(question, hit) : score.fused;
+      double finalScore =
+          strategy == Strategy.HYBRID_RERANK
+              ? score.fused * (1 - rerankWeight) + rerankScore * rerankWeight
+              : score.fused;
+      hit.setScore(finalScore);
+      hit.setBaseScore(score.fused);
+      hit.setRerankScore(rerankScore);
       hit.setLexicalScore(score.lexical);
       hit.setVectorScore(score.vector);
-      hit.setRetrievalMode(
-          score.lexical > 0 && score.vector > 0
-              ? "HYBRID"
-              : score.vector > 0 ? "VECTOR" : "LEXICAL");
+      hit.setRetrievalMode(strategy.name());
       result.add(hit);
-      if (result.size() >= topK) break;
     }
     result.sort(Comparator.comparingDouble(SearchHit::getScore).reversed());
-    return result;
+    return result.size() <= boundedTopK
+        ? result
+        : new ArrayList<SearchHit>(result.subList(0, boundedTopK));
   }
 
   private double normalizeBm25(double score) {
     return score <= 0 ? 0 : score / (score + 6.0);
   }
 
-  private boolean eligible(Score score) {
-    boolean channelQualified =
-        score.lexical >= minimumLexicalScore || score.vector >= minimumVectorScore;
+  private boolean eligible(Score score, Strategy strategy) {
+    boolean channelQualified;
+    if (strategy == Strategy.LEXICAL) {
+      channelQualified = score.lexical >= minimumLexicalScore;
+    } else if (strategy == Strategy.VECTOR) {
+      channelQualified = score.vector >= minimumVectorScore;
+    } else {
+      channelQualified =
+          score.lexical >= minimumLexicalScore || score.vector >= minimumVectorScore;
+    }
     return channelQualified && score.fused >= minimumScore;
+  }
+
+  private enum Strategy {
+    LEXICAL,
+    VECTOR,
+    HYBRID,
+    HYBRID_RERANK;
+
+    private static Strategy parse(String value) {
+      if (value == null || value.isBlank()) return HYBRID_RERANK;
+      try {
+        return Strategy.valueOf(value.trim().toUpperCase());
+      } catch (IllegalArgumentException invalid) {
+        return HYBRID_RERANK;
+      }
+    }
   }
 
   private static class Score {

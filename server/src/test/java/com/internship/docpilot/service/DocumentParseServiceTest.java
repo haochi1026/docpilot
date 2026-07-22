@@ -9,6 +9,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
 
 class DocumentParseServiceTest {
   @Test
@@ -62,5 +65,43 @@ class DocumentParseServiceTest {
     verify(documents).partial(eq(7L), eq("job-7"), anyString(), eq("PDFBOX"), eq(1));
     verify(documents, never()).success(anyLong(), anyString(), anyString(), anyString(), anyInt());
     verify(documents, never()).failed(eq(7L), eq("job-7"), anyString());
+  }
+
+  @Test
+  void retriesTransientChunkPublicationConflictBeforeFailingTheDocument() throws Exception {
+    DocumentRepository documents = mock(DocumentRepository.class);
+    OutboxRepository outbox = mock(OutboxRepository.class);
+    MinioStorageService storage = mock(MinioStorageService.class);
+    EmbeddingService embeddings = mock(EmbeddingService.class);
+    DocumentTextExtractor extractor = mock(DocumentTextExtractor.class);
+    SemanticChunker chunker = mock(SemanticChunker.class);
+    Map<String, Object> details = new HashMap<String, Object>();
+    details.put("object_key", "documents/8.md");
+    details.put("original_name", "policy.md");
+    details.put("kb_id", 3L);
+    details.put("parse_job_id", "job-8");
+    details.put("version", 1);
+    DocumentChunkDraft chunk = new DocumentChunkDraft(1, "Policy", "valid document content for retry", 8);
+    when(documents.claim(8L)).thenReturn(true);
+    when(documents.details(8L)).thenReturn(details);
+    when(documents.touchLease(8L, "job-8", 30)).thenReturn(true);
+    when(storage.open("documents/8.md")).thenReturn(new ByteArrayInputStream(new byte[] {1}));
+    when(extractor.extract(any(), eq("policy.md")))
+        .thenReturn(
+            new DocumentTextExtractor.ExtractionResult(
+                Collections.singletonList(new PageText(1, "valid document content for retry", false)),
+                false));
+    when(chunker.chunk(anyList())).thenReturn(Collections.singletonList(chunk));
+    when(embeddings.enabled()).thenReturn(false);
+    doThrow(new CannotAcquireLockException("deadlock"))
+        .doNothing()
+        .when(documents)
+        .replaceChunks(eq(8L), eq(3L), anyList(), eq("job-8"));
+
+    new DocumentParseService(documents, outbox, storage, embeddings, extractor, chunker).parse(8L);
+
+    verify(documents, times(2)).replaceChunks(eq(8L), eq(3L), anyList(), eq("job-8"));
+    verify(documents).success(eq(8L), eq("job-8"), eq("DISABLED"), eq("TIKA"), eq(1));
+    verify(documents, never()).failed(eq(8L), eq("job-8"), anyString());
   }
 }

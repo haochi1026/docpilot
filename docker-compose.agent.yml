@@ -22,6 +22,7 @@ services:
       OLLAMA_MODEL: ${AGENT_MODEL:-qwen3.5:2b}
       DOCPILOT_BASE_URL: http://server:8080
       DOCPILOT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
+      DOCPILOT_IDENTITY_TOKEN_SECRET: ${AGENT_INTERNAL_IDENTITY_SECRET:-docpilot-agent-identity-local-secret}
       CHECKPOINT_BACKEND: ${CHECKPOINT_BACKEND:-postgres}
       CHECKPOINT_PATH: /data/checkpoints.sqlite
       CHECKPOINT_DSN: postgresql://${AGENT_POSTGRES_USER:-docpilot_agent}:${AGENT_POSTGRES_PASSWORD:-docpilot-agent-local-password}@agent-postgres:5432/${AGENT_POSTGRES_DB:-docpilot_agent}?sslmode=disable
@@ -65,6 +66,8 @@ services:
       AGENT_ENABLED: "true"
       AGENT_BASE_URL: http://agent-service:8090
       AGENT_INTERNAL_KEY: ${AGENT_INTERNAL_KEY:-docpilot-agent-local-key-change-me}
+      AGENT_INTERNAL_IDENTITY_SECRET: ${AGENT_INTERNAL_IDENTITY_SECRET:-docpilot-agent-identity-local-secret}
+      AGENT_INTERNAL_IDENTITY_REQUIRED: "true"
       AGENT_SERVICE_KEY: ${AGENT_SERVICE_KEY:-docpilot-agent-service-local-key}
       AGENT_APPROVAL_SECRET: ${AGENT_APPROVAL_SECRET:-docpilot-agent-approval-local-key}
       AGENT_APPROVAL_TTL_MINUTES: ${AGENT_APPROVAL_TTL_MINUTES:-15}

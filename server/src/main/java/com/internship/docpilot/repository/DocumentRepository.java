@@ -411,16 +411,20 @@ public class DocumentRepository {
                 + ") AND c.revision_no=d.active_revision AND d.status<>'DELETED' "
                 + "AND d.active_revision>0",
             ids.toArray(),
-            (r, i) ->
-                new SearchHit(
-                    r.getLong("chunk_id"),
-                    r.getLong("document_id"),
-                    r.getString("original_name"),
-                    r.getString("content"),
-                    (Integer) r.getObject("page_no"),
-                    r.getInt("revision_no"),
-                    0,
-                    null));
+            (r, i) -> {
+              SearchHit hit =
+                  new SearchHit(
+                      r.getLong("chunk_id"),
+                      r.getLong("document_id"),
+                      r.getString("original_name"),
+                      r.getString("content"),
+                      (Integer) r.getObject("page_no"),
+                      r.getInt("revision_no"),
+                      0,
+                      null);
+              hit.setHeading(r.getString("heading"));
+              return hit;
+            });
     Map<Long, SearchHit> result = new LinkedHashMap<Long, SearchHit>();
     for (SearchHit hit : hits) result.put(hit.getChunkId(), hit);
     return result;

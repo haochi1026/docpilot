@@ -1,0 +1,14 @@
+[
+  {"name": "travel-hotel", "question": "北京地区住宿标准是多少？", "expected_document": "agent-eval-policy.md"},
+  {"name": "travel-deadline", "question": "返程后多久必须提交差旅报销？", "expected_document": "agent-eval-policy.md"},
+  {"name": "travel-materials", "question": "差旅报销必须附哪些材料？", "expected_document": "agent-eval-policy.md"},
+  {"name": "policy-version", "question": "制度文档的正式版本号是什么？", "expected_document": "agent-eval-policy.md"},
+  {"name": "key-rotation", "question": "生产模型密钥多久轮换一次？", "expected_document": "agent-eval-policy.md"},
+  {"name": "write-retry-rule", "question": "什么情况下写请求允许重试？", "expected_document": "agent-eval-security.md"},
+  {"name": "circuit-rule", "question": "连续工具失败后应采取什么措施？", "expected_document": "agent-eval-security.md"},
+  {"name": "threshold-rule", "question": "检索未达到最低阈值时应该怎样回答？", "expected_document": "agent-eval-security.md"},
+  {"name": "approval-binding", "question": "人工审批记录需要绑定哪些信息？", "expected_document": "agent-eval-security.md"},
+  {"name": "document-retry-role", "question": "谁可以重新发布失败文档的解析任务？", "expected_document": "agent-eval-policy.md"},
+  {"name": "no-answer-mars", "question": "公司火星基地午餐菜单是什么？", "expected_document": null},
+  {"name": "no-answer-budget", "question": "董事会明年的秘密预算是多少？", "expected_document": null}
+]

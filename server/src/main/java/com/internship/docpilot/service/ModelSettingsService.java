@@ -3,12 +3,14 @@ package com.internship.docpilot.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internship.docpilot.dto.ModelSettingsRequest;
+import com.internship.docpilot.config.HttpClientFactory;
 import com.internship.docpilot.exception.BusinessException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -22,12 +24,13 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class ModelSettingsService {
   private final JdbcTemplate jdbc;
-  private final RestTemplate http = new RestTemplate();
+  private final RestTemplate http;
   private final ObjectMapper mapper = new ObjectMapper();
   private final Snapshot defaults;
   private final String aiApiKey;
   private final String embeddingApiKey;
 
+  @Autowired
   public ModelSettingsService(
       JdbcTemplate jdbc,
       @Value("${app.ai.mode:local}") String aiMode,
@@ -37,10 +40,13 @@ public class ModelSettingsService {
       @Value("${app.embedding.mode:local}") String embeddingMode,
       @Value("${app.embedding.base-url:http://host.docker.internal:11434/v1}") String embeddingBaseUrl,
       @Value("${app.embedding.api-key:ollama}") String embeddingApiKey,
-      @Value("${app.embedding.model:qwen3-embedding:0.6b}") String embeddingModel) {
+      @Value("${app.embedding.model:qwen3-embedding:0.6b}") String embeddingModel,
+      @Value("${app.ai.connect-timeout-ms:2000}") int connectTimeoutMs,
+      @Value("${app.ai.read-timeout-ms:180000}") int readTimeoutMs) {
     this.jdbc = jdbc;
     this.aiApiKey = aiApiKey;
     this.embeddingApiKey = embeddingApiKey;
+    this.http = HttpClientFactory.bounded(connectTimeoutMs, readTimeoutMs);
     defaults = new Snapshot(aiMode, aiBaseUrl, aiModel, embeddingMode, embeddingBaseUrl, embeddingModel);
   }
 

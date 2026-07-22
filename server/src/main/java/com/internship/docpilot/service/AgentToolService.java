@@ -37,19 +37,23 @@ public class AgentToolService {
     this.approvals = approvals;
   }
 
-  public List<KnowledgeBase> listKnowledgeBases(String key, String username) {
-    AppUser user = guard.authenticate(key, username);
+  public List<KnowledgeBase> listKnowledgeBases(
+      String key, String username, String identityToken) {
+    AppUser user = guard.authenticate(key, username, identityToken);
     return knowledgeBases.list(user.getId(), user.getRole());
   }
 
-  public List<SearchHit> search(String key, String username, AgentSearchRequest request) {
-    AppUser user = guard.authenticate(key, username);
+  public List<SearchHit> search(
+      String key, String username, String identityToken, AgentSearchRequest request) {
+    AppUser user = guard.authenticate(key, username, identityToken);
     knowledgeBases.requireRead(request.getKbId(), user.getId(), user.getRole());
-    return retrieval.search(request.getKbId(), request.getQuery(), request.getTopK());
+    return retrieval.search(
+        request.getKbId(), request.getQuery(), request.getTopK(), request.getStrategy());
   }
 
-  public Map<String, Object> chunk(String key, String username, Long chunkId) {
-    AppUser user = guard.authenticate(key, username);
+  public Map<String, Object> chunk(
+      String key, String username, String identityToken, Long chunkId) {
+    AppUser user = guard.authenticate(key, username, identityToken);
     Map<String, Object> chunk = documents.agentChunk(chunkId);
     if (chunk == null) {
       throw new BusinessException(HttpStatus.NOT_FOUND, "引用片段不存在");
@@ -59,14 +63,16 @@ public class AgentToolService {
     return chunk;
   }
 
-  public List<DocumentView> listDocuments(String key, String username, Long kbId) {
-    AppUser user = guard.authenticate(key, username);
+  public List<DocumentView> listDocuments(
+      String key, String username, String identityToken, Long kbId) {
+    AppUser user = guard.authenticate(key, username, identityToken);
     knowledgeBases.requireRead(kbId, user.getId(), user.getRole());
     return documents.byKb(kbId);
   }
 
-  public Map<String, Object> documentDiagnostics(String key, String username, Long documentId) {
-    AppUser user = guard.authenticate(key, username);
+  public Map<String, Object> documentDiagnostics(
+      String key, String username, String identityToken, Long documentId) {
+    AppUser user = guard.authenticate(key, username, identityToken);
     Long kbId = documents.kbId(documentId);
     if (kbId == null) {
       throw new BusinessException(HttpStatus.NOT_FOUND, "文档不存在");
@@ -79,10 +85,11 @@ public class AgentToolService {
   public Map<String, Object> retryDocument(
       String key,
       String username,
+      String identityToken,
       String approvalId,
       String approvalToken,
       Long documentId) {
-    AppUser user = guard.authenticate(key, username);
+    AppUser user = guard.authenticate(key, username, identityToken);
     approvals.consume(
         user.getId(), approvalId, approvalToken, "retry_document_parsing", documentId);
     documentService.retry(user.getId(), user.getRole(), documentId);

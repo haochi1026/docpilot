@@ -59,6 +59,10 @@ class Settings:
     agentops_identity_audience: str = "agentops-hub"
     agentops_identity_key_id: str = "v1"
     trace_capture_content: bool = False
+    docpilot_identity_token_secret: str = ""
+    docpilot_identity_issuer: str = "docpilot-agent"
+    docpilot_identity_audience: str = "docpilot-server"
+    docpilot_identity_key_id: str = "v1"
 
     @property
     def production(self) -> bool:
@@ -80,6 +84,10 @@ class Settings:
                 raise ValueError("AGENT_SERVICE_KEY must be changed in production")
             if self.docpilot_internal_key in weak:
                 raise ValueError("DOCPILOT_INTERNAL_KEY must be changed in production")
+            if not self.docpilot_identity_token_secret:
+                raise ValueError(
+                    "production internal gateway requires DOCPILOT_IDENTITY_TOKEN_SECRET"
+                )
             if self.checkpoint_backend != "postgres":
                 raise ValueError("production mode requires postgres checkpoints")
             if self.agentops_enabled and not self.agentops_api_key:
@@ -152,6 +160,16 @@ class Settings:
             ),
             agentops_identity_key_id=os.getenv("AGENTOPS_IDENTITY_KEY_ID", "v1"),
             trace_capture_content=_bool("TRACE_CAPTURE_CONTENT", False),
+            docpilot_identity_token_secret=os.getenv(
+                "DOCPILOT_IDENTITY_TOKEN_SECRET", ""
+            ),
+            docpilot_identity_issuer=os.getenv(
+                "DOCPILOT_IDENTITY_ISSUER", "docpilot-agent"
+            ),
+            docpilot_identity_audience=os.getenv(
+                "DOCPILOT_IDENTITY_AUDIENCE", "docpilot-server"
+            ),
+            docpilot_identity_key_id=os.getenv("DOCPILOT_IDENTITY_KEY_ID", "v1"),
             agentops_timeout_seconds=_float("AGENTOPS_TIMEOUT_SECONDS", 2, 0.1),
             checkpoint_retention_days=_int("CHECKPOINT_RETENTION_DAYS", 30, 1),
             checkpoint_cleanup_interval_seconds=_int("CHECKPOINT_CLEANUP_INTERVAL_SECONDS", 21600, 300),

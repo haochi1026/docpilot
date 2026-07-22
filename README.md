@@ -71,6 +71,8 @@ DocPilot 是一个面向课题组和部门内部资料的私有化知识库 Agen
 - 中文二元词项和英文单词在入库时写入倒排表；BM25 的文档频率、平均长度和候选统计基于当前知识库全部可用切片，不再只统计“前 500 条候选”。历史切片由启动回填任务补齐词项与 Token 数。
 - 向量通道使用 pgvector HNSW 召回，词法与向量得分默认按 `0.35 / 0.65` 融合；Embedding 服务不可用时自动退回全库 BM25。
 - 排序后先执行相关性门禁，再截取 TopK：默认总分阈值 `0.20`、词法通道阈值 `0.05`、纯向量通道阈值 `0.45`。候选必须至少通过一个通道门槛和总分门槛，因此小语料库中的“最近但仍不相关”向量不会被强制返回。
+- 默认只对已通过相关性门禁的前 24 个候选执行可解释二阶段 Reranker，综合问题词项覆盖、标题/文件名覆盖、词项邻近度和短语命中；最终得分保留 `baseScore`、`rerankScore` 和通道分数，便于 Trace 定位。Reranker 只重排合格候选，不能把门槛以下的无关片段“救回来”。
+- 内部检索支持 `LEXICAL / VECTOR / HYBRID / HYBRID_RERANK` 四种显式策略；`scripts/retrieval_ablation.py` 使用固定标注问题输出 Recall@K、MRR 与无答案准确率，避免只凭单个演示问题宣称重排有效。
 - 无合格片段时检索返回空数组，Agent 输出明确的证据不足答复；有命中时保留文档、修订号、切片、PDF 页码和得分，回答中的 `[n]` 只能引用实际返回来源。
 
 ### 5. 运行时模型切换
@@ -267,7 +269,7 @@ docker compose -f docker-compose.yml -f docker-compose.agent.yml up -d --build
 Agent 服务使用 LangChain 工具与 ChatOllama，并以显式 LangGraph 组织两条主路径：知识问答执行
 `route_intent → plan_required_retrieval → execute_tools → verify_result → call_model → guard_answer`；
 文档运维执行 `route_intent → plan_document_operation → execute_tools → advance_document_operation → policy_gate`。
-知识型问题会被确定性规划为先检索，模型不能跳过证据获取；无证据直接拒答，缺失引用可在不新增事实、且引用序号不越界的前提下做一次修复。若模型回答仍夹带未引用结论，系统只在问题与来源原句达到严格词面匹配阈值时返回一条逐字抽取并带引用的原句，否则继续安全拒答。文档恢复则固定执行“诊断状态 → 校验 FAILED/PARTIAL → 生成写动作 → HITL”，不把关键状态迁移交给模型猜测。
+知识型问题会被确定性规划为先检索，模型不能跳过证据获取；无证据直接拒答，缺失引用可在不新增事实、且引用序号不越界的前提下做一次修复。若模型回答仍夹带未引用结论，系统只在问题与来源原句达到严格词面匹配阈值时返回一条逐字抽取并带引用的原句，否则继续安全拒答。文档恢复固定执行“列出候选 → 逐项诊断 → 校验 FAILED/PARTIAL → 为单个文档生成写动作 → HITL → 校验入队响应 → 继续下一项 → 汇总”，不把关键状态迁移交给模型猜测。批量恢复最多处理 5 个候选，每个文档都有独立审批，可在任意一次审批处跨进程中断/恢复；拒绝或单项失败会记入计划结果，不会绕过审批，也不会抹掉已经完成的步骤。
 LangGraph checkpoint 以对话 ID 维持状态，开发环境可用 SQLite，Compose 默认使用 PostgreSQL。
 `retry_document_parsing` 在 `policy_gate` 中断；待审批动作同时写入 Java 业务库，容器重启后仍可查询并以相同 `thread_id` 恢复。
 Java 内部网关仍负责用户映射、ACL、`FAILED → PENDING` 条件更新、Outbox 入队和重复任务防护，
@@ -302,14 +304,25 @@ Agent 服务就绪检查：<http://localhost:18090/health/ready>；指标：<htt
 - 普通问答在 Agent 连接失败、超时或执行异常时回退固定 RAG；审批恢复依赖 checkpoint，不进行无状态重放。
 - Java 调用 Agent 服务时使用独立服务密钥；单次运行限制模型与工具调用次数，防止循环失控。
 - 内部工具网关对安全读取执行指数退避重试，并以连续失败熔断保护下游服务；重解析写操作不做网络层自动重放，由 Java `FAILED → PENDING` 条件更新防止重复领取。
-- 可选接入 AgentOps Hub 上报 Trace、模型 Span 与工具 Span；流式响应通过请求级 `ContextVar` 上下文推进 LangGraph，避免跨线程/分段 `yield` 后丢失 Span，也不会用全局状态串扰并发请求。生产模式使用与 AgentOps `IDENTITY_TOKEN_SECRET` 对应的 `AGENTOPS_IDENTITY_TOKEN_SECRET`，为每次请求生成 5 分钟服务身份令牌，避免把会过期的静态令牌长期写入环境变量。`/v1/agent/evaluate` 提供回归评测所需的结构化结果，观测平台异常不会阻断业务回答。
+- Agent→Java 内部工具接口采用“内部服务密钥 + 短时 HMAC 用户身份”双重校验：令牌绑定 `iss/aud/kid/jti/sub/iat/nbf/exp`，Java 验签、校验时窗并重新查询启用用户与 ACL，不信任可伪造的用户名请求头。可选接入 AgentOps Hub 上报 Trace、模型 Span 与工具 Span；流式响应通过请求级 `ContextVar` 上下文推进 LangGraph，避免跨线程/分段 `yield` 后丢失 Span，也不会用全局状态串扰并发请求。生产模式使用与 AgentOps `IDENTITY_TOKEN_SECRET` 对应的 `AGENTOPS_IDENTITY_TOKEN_SECRET`，为每次请求生成 5 分钟服务身份令牌，避免把会过期的静态令牌长期写入环境变量。`/v1/agent/evaluate` 提供回归评测所需的结构化结果，观测平台异常不会阻断业务回答。
+
+## 学习阶段前的四项基线
+
+[`docs/READINESS_BASELINE.md`](docs/READINESS_BASELINE.md) 固化了当前已验证能力、真实依赖验收和轻量并发基线。建议在系统 E2E 运行时执行：
+
+```powershell
+.\scripts\run_acceptance_matrix.ps1
+.\scripts\run_light_load.ps1 -BaseUrl http://127.0.0.1:28081
+```
+
+真实依赖验收会临时启用 RocketMQ、pgvector、Tesseract OCR 和 Ollama Embedding；稳定系统 E2E 则继续保持本地队列、关闭向量和 OCR，以保证回归可重复。两种结果不能混写。
 
 ## 验收口径与当前边界
 
 - **检索正确性**：相关问题必须返回可核验来源；全不相关问题必须零召回并安全拒答；PDF 来源必须带真实页码，扫描页必须经过 OCR 后才可索引。
 - **索引一致性**：正文抽取、词法索引和向量索引状态分别可见；Embedding 失败不得标记完整成功，也不得留下可搜索的半套向量。
 - **Agent 可恢复性**：写操作必须先中断并持久化审批，重启后仍可恢复；令牌必须绑定用户、线程、工具和参数且只能消费一次。
-- **评测闭环**：每次 Agent 运行上报 Trace/Span；AgentOps 使用 48 条版本化用例、重复运行、确定性多维评分与可选语义 Judge 做回归，失败证据可由 EvalOps 诊断并经 HITL 加入回归集或发起新评测。
+- **评测闭环**：每次 Agent 运行上报 Trace/Span；AgentOps 使用 160 条分层版本化用例（48 条人工核心 + 112 条矩阵变体）、重复运行、确定性多维评分与可选语义 Judge 做回归，失败证据可由 EvalOps 诊断并经 HITL 加入回归集或发起新评测。
 
 - 当前 Token 预算使用轻量估算器，不是特定模型的精确 tokenizer；需要严格上下文计费时可替换成与部署模型一致的 tokenizer。
 - Tesseract 适合中英文印刷体扫描件；复杂表格、手写体和低清图片仍需要版面分析/OCR 服务与人工抽样复核。

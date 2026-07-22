@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -62,6 +67,9 @@ class InternalGateway:
         circuit_key = base_url.rstrip("/")
         self._check_circuit(circuit_key)
         headers = {"X-Agent-Key": key, "X-Username": username}
+        identity = self._identity_token(username)
+        if identity:
+            headers["X-Agent-Identity"] = identity
         if approval_id:
             headers["X-Agent-Approval-Id"] = approval_id
         if approval_token:
@@ -126,6 +134,29 @@ class InternalGateway:
                 error=message,
             )
         raise GatewayError(message) from last_error
+
+    def _identity_token(self, username: str) -> str:
+        secret = self.settings.docpilot_identity_token_secret
+        if not secret:
+            return ""
+        now = int(time.time())
+        payload = {
+            "iss": self.settings.docpilot_identity_issuer,
+            "aud": self.settings.docpilot_identity_audience,
+            "kid": self.settings.docpilot_identity_key_id,
+            "jti": uuid.uuid4().hex,
+            "sub": username,
+            "iat": now,
+            "nbf": now - 1,
+            "exp": now + 300,
+        }
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":")).encode()
+        ).decode().rstrip("=")
+        signature = base64.urlsafe_b64encode(
+            hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).digest()
+        ).decode().rstrip("=")
+        return f"{encoded}.{signature}"
 
     def _message(self, error: Exception | None) -> str:
         if isinstance(error, httpx.HTTPStatusError):

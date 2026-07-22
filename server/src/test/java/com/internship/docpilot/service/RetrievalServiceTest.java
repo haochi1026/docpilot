@@ -15,6 +15,7 @@ import com.internship.docpilot.model.SearchHit;
 import com.internship.docpilot.repository.DocumentRepository;
 import com.internship.docpilot.repository.VectorStoreRepository;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,20 @@ class RetrievalServiceTest {
     when(embeddings.enabled()).thenReturn(false);
     RetrievalService service =
         new RetrievalService(
-            documents, embeddings, vectors, new TokenEstimator(), 0.32, 0.05, 0.45, 0.35, 0.65, 160);
+            documents,
+            embeddings,
+            vectors,
+            new TokenEstimator(),
+            new RetrievalReranker(new TokenEstimator()),
+            0.32,
+            0.05,
+            0.45,
+            0.35,
+            0.65,
+            160,
+            24,
+            0.25,
+            "HYBRID_RERANK");
 
     assertTrue(service.search(3L, "完全无关的问题", 4).isEmpty());
     verify(documents, never()).chunksByIds(anyList());
@@ -56,11 +70,79 @@ class RetrievalServiceTest {
     when(documents.chunksByIds(Collections.singletonList(7L))).thenReturn(hits);
     RetrievalService service =
         new RetrievalService(
-            documents, embeddings, vectors, new TokenEstimator(), 0.32, 0.05, 0.45, 0.35, 0.65, 160);
+            documents,
+            embeddings,
+            vectors,
+            new TokenEstimator(),
+            new RetrievalReranker(new TokenEstimator()),
+            0.32,
+            0.05,
+            0.45,
+            0.35,
+            0.65,
+            160,
+            24,
+            0.25,
+            "VECTOR");
 
     SearchHit result = service.search(3L, "审批制度", 4).get(0);
     assertEquals(0.91, result.getScore(), 0.0001);
     assertEquals(0.91, result.getVectorScore(), 0.0001);
     assertEquals("VECTOR", result.getRetrievalMode());
+  }
+
+  @Test
+  void rerankerPromotesCandidateWhoseContentAndHeadingCoverTheQuestion() {
+    DocumentRepository documents = mock(DocumentRepository.class);
+    EmbeddingService embeddings = mock(EmbeddingService.class);
+    VectorStoreRepository vectors = mock(VectorStoreRepository.class);
+    when(documents.lexicalCandidates(eq(3L), anyList(), eq(160)))
+        .thenReturn(
+            Arrays.asList(
+                new RetrievalCandidate(2L, 3.2),
+                new RetrievalCandidate(1L, 3.0)));
+    when(embeddings.enabled()).thenReturn(false);
+    Map<Long, SearchHit> hits = new LinkedHashMap<Long, SearchHit>();
+    SearchHit weak =
+        new SearchHit(2L, 2L, "misc.md", "generic operations notes", 1, 1, 0, null);
+    SearchHit strong =
+        new SearchHit(
+            1L,
+            1L,
+            "incident-handbook.md",
+            "The incident response code is OPS-7319.",
+            1,
+            1,
+            0,
+            null);
+    strong.setHeading("Incident response");
+    hits.put(1L, strong);
+    hits.put(2L, weak);
+    when(documents.chunksByIds(anyList())).thenReturn(hits);
+    TokenEstimator tokens = new TokenEstimator();
+    RetrievalService service =
+        new RetrievalService(
+            documents,
+            embeddings,
+            vectors,
+            tokens,
+            new RetrievalReranker(tokens),
+            0.10,
+            0.05,
+            0.45,
+            0.35,
+            0.65,
+            160,
+            24,
+            0.60,
+            "HYBRID_RERANK");
+
+    java.util.List<SearchHit> result =
+        service.search(3L, "incident response code", 2, "HYBRID_RERANK");
+
+    assertEquals(1L, result.get(0).getChunkId());
+    assertEquals("HYBRID_RERANK", result.get(0).getRetrievalMode());
+    assertTrue(result.get(0).getRerankScore() > result.get(1).getRerankScore());
+    assertTrue(result.get(0).getScore() > result.get(1).getScore());
   }
 }

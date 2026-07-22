@@ -1,0 +1,179 @@
+{
+  "runId": "20260722-185243-95c386",
+  "startedAt": "2026-07-22T18:52:43.081717+08:00",
+  "baseUrl": "http://127.0.0.1:28081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "local",
+    "aiModel": "未接入大模型",
+    "embeddingMode": "local",
+    "embeddingModel": "未使用 Embedding",
+    "retrievalMode": "字符词片检索",
+    "answerMode": "LangChain / LangGraph Agent",
+    "agentEnabled": true,
+    "queueMode": "local"
+  },
+  "parameters": {
+    "uploads": 10,
+    "workers": 10,
+    "sizeKb": 8,
+    "chatConcurrency": 0,
+    "ollama": false
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 10
+    },
+    "latency": {
+      "count": 10,
+      "minMs": 106.57,
+      "meanMs": 110.41,
+      "p50Ms": 110.58,
+      "p95Ms": 113.1,
+      "p99Ms": 113.1,
+      "maxMs": 113.1
+    },
+    "wallMs": 324.54,
+    "throughputPerSecond": 30.81,
+    "documentIds": [
+      14,
+      11,
+      9,
+      7,
+      8,
+      13,
+      15,
+      10,
+      12,
+      16
+    ],
+    "failedResponses": [],
+    "formats": {
+      "synthetic-text": 10
+    }
+  },
+  "parse": {
+    "passed": true,
+    "terminalCount": 10,
+    "successCount": 10,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 10,
+      "minMs": 2055.5,
+      "meanMs": 2631.99,
+      "p50Ms": 2585.96,
+      "p95Ms": 3092.84,
+      "p99Ms": 3092.84,
+      "maxMs": 3092.84
+    },
+    "documents": {
+      "9": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2055.5
+      },
+      "8": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2055.76
+      },
+      "14": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2585.99
+      },
+      "11": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2586.9
+      },
+      "7": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2585.85
+      },
+      "13": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2585.96
+      },
+      "10": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2585.9
+      },
+      "15": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3092.84
+      },
+      "12": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3092.47
+      },
+      "16": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3092.78
+      }
+    }
+  },
+  "chat": {
+    "skipped": true,
+    "reason": "disabled or parsing failed"
+  },
+  "documentCleanup": [
+    {
+      "documentId": 14,
+      "status": 204
+    },
+    {
+      "documentId": 11,
+      "status": 204
+    },
+    {
+      "documentId": 9,
+      "status": 204
+    },
+    {
+      "documentId": 7,
+      "status": 204
+    },
+    {
+      "documentId": 8,
+      "status": 204
+    },
+    {
+      "documentId": 13,
+      "status": 204
+    },
+    {
+      "documentId": 15,
+      "status": 204
+    },
+    {
+      "documentId": 10,
+      "status": 204
+    },
+    {
+      "documentId": 12,
+      "status": 204
+    },
+    {
+      "documentId": 16,
+      "status": 204
+    }
+  ],
+  "finishedAt": "2026-07-22T18:52:46.617532+08:00",
+  "passed": true,
+  "failedTests": []
+}

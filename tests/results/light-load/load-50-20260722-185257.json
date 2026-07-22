@@ -1,0 +1,579 @@
+{
+  "runId": "20260722-185259-8b1ec1",
+  "startedAt": "2026-07-22T18:52:59.416136+08:00",
+  "baseUrl": "http://127.0.0.1:28081",
+  "user": {
+    "userId": 2,
+    "role": "ADMIN"
+  },
+  "knowledgeBase": {
+    "id": 1,
+    "name": "课题组资料库"
+  },
+  "capabilitiesBefore": {
+    "aiMode": "local",
+    "aiModel": "未接入大模型",
+    "embeddingMode": "local",
+    "embeddingModel": "未使用 Embedding",
+    "retrievalMode": "字符词片检索",
+    "answerMode": "LangChain / LangGraph Agent",
+    "agentEnabled": true,
+    "queueMode": "local"
+  },
+  "parameters": {
+    "uploads": 50,
+    "workers": 20,
+    "sizeKb": 8,
+    "chatConcurrency": 0,
+    "ollama": false
+  },
+  "upload": {
+    "passed": true,
+    "statusCounts": {
+      "200": 50
+    },
+    "latency": {
+      "count": 50,
+      "minMs": 8.59,
+      "meanMs": 17.5,
+      "p50Ms": 14.12,
+      "p95Ms": 48.8,
+      "p99Ms": 52.06,
+      "maxMs": 52.06
+    },
+    "wallMs": 652.86,
+    "throughputPerSecond": 76.59,
+    "documentIds": [
+      69,
+      83,
+      39,
+      37,
+      58,
+      82,
+      46,
+      67,
+      66,
+      68,
+      78,
+      80,
+      79,
+      57,
+      81,
+      47,
+      64,
+      38,
+      84,
+      86,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      48,
+      49,
+      51,
+      50,
+      54,
+      52,
+      56,
+      53,
+      55,
+      65,
+      60,
+      61,
+      62,
+      63,
+      59,
+      71,
+      70,
+      72,
+      77,
+      76,
+      75,
+      74,
+      73,
+      85
+    ],
+    "failedResponses": [],
+    "formats": {
+      "synthetic-text": 50
+    }
+  },
+  "parse": {
+    "passed": true,
+    "terminalCount": 50,
+    "successCount": 50,
+    "failedCount": 0,
+    "completionLatency": {
+      "count": 50,
+      "minMs": 1659.43,
+      "meanMs": 3694.92,
+      "p50Ms": 3678.5,
+      "p95Ms": 5694.2,
+      "p99Ms": 5726.82,
+      "maxMs": 5726.82
+    },
+    "documents": {
+      "39": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 1663.53
+      },
+      "37": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 1668.45
+      },
+      "38": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 1667.1
+      },
+      "40": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 1659.43
+      },
+      "46": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2161.14
+      },
+      "41": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2173.86
+      },
+      "42": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2170.44
+      },
+      "43": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2163.76
+      },
+      "44": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2163.05
+      },
+      "45": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2161.35
+      },
+      "47": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2668.63
+      },
+      "48": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2669.13
+      },
+      "49": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2668.2
+      },
+      "51": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2667.36
+      },
+      "50": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2667.82
+      },
+      "52": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 2657.18
+      },
+      "58": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3157.55
+      },
+      "57": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3163.59
+      },
+      "54": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3164.7
+      },
+      "56": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3163.78
+      },
+      "53": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3164.05
+      },
+      "55": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3163.17
+      },
+      "60": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3679.36
+      },
+      "61": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3678.5
+      },
+      "62": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3676.81
+      },
+      "63": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3678.14
+      },
+      "59": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 3678.98
+      },
+      "69": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4165.76
+      },
+      "67": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4175.1
+      },
+      "66": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4177.27
+      },
+      "68": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4169.39
+      },
+      "64": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4181.53
+      },
+      "65": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4182.23
+      },
+      "70": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4165.62
+      },
+      "71": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4670.51
+      },
+      "72": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4671.09
+      },
+      "76": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4669.94
+      },
+      "75": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4669.64
+      },
+      "74": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4670.31
+      },
+      "73": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 4670.4
+      },
+      "78": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5196.31
+      },
+      "80": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5196.19
+      },
+      "79": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5196.6
+      },
+      "81": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5196.51
+      },
+      "77": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5199.03
+      },
+      "83": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5694.2
+      },
+      "82": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5726.82
+      },
+      "84": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5694.11
+      },
+      "86": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5694.04
+      },
+      "85": {
+        "status": "SUCCESS",
+        "errorMessage": null,
+        "completionMs": 5694.25
+      }
+    }
+  },
+  "chat": {
+    "skipped": true,
+    "reason": "disabled or parsing failed"
+  },
+  "documentCleanup": [
+    {
+      "documentId": 69,
+      "status": 204
+    },
+    {
+      "documentId": 83,
+      "status": 204
+    },
+    {
+      "documentId": 39,
+      "status": 204
+    },
+    {
+      "documentId": 37,
+      "status": 204
+    },
+    {
+      "documentId": 58,
+      "status": 204
+    },
+    {
+      "documentId": 82,
+      "status": 204
+    },
+    {
+      "documentId": 46,
+      "status": 204
+    },
+    {
+      "documentId": 67,
+      "status": 204
+    },
+    {
+      "documentId": 66,
+      "status": 204
+    },
+    {
+      "documentId": 68,
+      "status": 204
+    },
+    {
+      "documentId": 78,
+      "status": 204
+    },
+    {
+      "documentId": 80,
+      "status": 204
+    },
+    {
+      "documentId": 79,
+      "status": 204
+    },
+    {
+      "documentId": 57,
+      "status": 204
+    },
+    {
+      "documentId": 81,
+      "status": 204
+    },
+    {
+      "documentId": 47,
+      "status": 204
+    },
+    {
+      "documentId": 64,
+      "status": 204
+    },
+    {
+      "documentId": 38,
+      "status": 204
+    },
+    {
+      "documentId": 84,
+      "status": 204
+    },
+    {
+      "documentId": 86,
+      "status": 204
+    },
+    {
+      "documentId": 40,
+      "status": 204
+    },
+    {
+      "documentId": 41,
+      "status": 204
+    },
+    {
+      "documentId": 42,
+      "status": 204
+    },
+    {
+      "documentId": 43,
+      "status": 204
+    },
+    {
+      "documentId": 44,
+      "status": 204
+    },
+    {
+      "documentId": 45,
+      "status": 204
+    },
+    {
+      "documentId": 48,
+      "status": 204
+    },
+    {
+      "documentId": 49,
+      "status": 204
+    },
+    {
+      "documentId": 51,
+      "status": 204
+    },
+    {
+      "documentId": 50,
+      "status": 204
+    },
+    {
+      "documentId": 54,
+      "status": 204
+    },
+    {
+      "documentId": 52,
+      "status": 204
+    },
+    {
+      "documentId": 56,
+      "status": 204
+    },
+    {
+      "documentId": 53,
+      "status": 204
+    },
+    {
+      "documentId": 55,
+      "status": 204
+    },
+    {
+      "documentId": 65,
+      "status": 204
+    },
+    {
+      "documentId": 60,
+      "status": 204
+    },
+    {
+      "documentId": 61,
+      "status": 204
+    },
+    {
+      "documentId": 62,
+      "status": 204
+    },
+    {
+      "documentId": 63,
+      "status": 204
+    },
+    {
+      "documentId": 59,
+      "status": 204
+    },
+    {
+      "documentId": 71,
+      "status": 204
+    },
+    {
+      "documentId": 70,
+      "status": 204
+    },
+    {
+      "documentId": 72,
+      "status": 204
+    },
+    {
+      "documentId": 77,
+      "status": 204
+    },
+    {
+      "documentId": 76,
+      "status": 204
+    },
+    {
+      "documentId": 75,
+      "status": 204
+    },
+    {
+      "documentId": 74,
+      "status": 204
+    },
+    {
+      "documentId": 73,
+      "status": 204
+    },
+    {
+      "documentId": 85,
+      "status": 204
+    }
+  ],
+  "finishedAt": "2026-07-22T18:53:06.228642+08:00",
+  "passed": true,
+  "failedTests": []
+}

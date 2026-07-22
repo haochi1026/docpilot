@@ -35,6 +35,7 @@ spring:
     time-zone: Asia/Shanghai
 
 app:
+  environment: ${APP_ENV:development}
   document:
     revision-retention-count: ${DOCUMENT_REVISION_RETENTION_COUNT:3}
   jwt-secret: ${JWT_SECRET:change-this-docpilot-demo-secret-key-at-least-32-bytes}
@@ -54,11 +55,15 @@ app:
     base-url: ${AI_BASE_URL:http://localhost:11434/v1}
     api-key: ${AI_API_KEY:ollama}
     model: ${AI_MODEL:qwen3.5:2b}
+    connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AI_READ_TIMEOUT_MS:180000}
   embedding:
     mode: ${EMBEDDING_MODE:local}
     base-url: ${EMBEDDING_BASE_URL:http://localhost:11434/v1}
     api-key: ${EMBEDDING_API_KEY:ollama}
     model: ${EMBEDDING_MODEL:qwen3-embedding:0.6b}
+    connect-timeout-ms: ${EMBEDDING_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${EMBEDDING_READ_TIMEOUT_MS:60000}
     dimension: ${EMBEDDING_DIMENSION:1024}
   vector-store:
     enabled: ${VECTOR_STORE_ENABLED:true}
@@ -73,6 +78,9 @@ app:
     lexical-weight: ${RETRIEVAL_LEXICAL_WEIGHT:0.35}
     vector-weight: ${RETRIEVAL_VECTOR_WEIGHT:0.65}
     lexical-candidate-limit: ${LEXICAL_CANDIDATE_LIMIT:160}
+    strategy: ${RETRIEVAL_STRATEGY:HYBRID_RERANK}
+    rerank-candidate-limit: ${RERANK_CANDIDATE_LIMIT:24}
+    rerank-weight: ${RERANK_WEIGHT:0.25}
   chunking:
     max-tokens: ${CHUNK_MAX_TOKENS:480}
     overlap-tokens: ${CHUNK_OVERLAP_TOKENS:60}
@@ -93,6 +101,12 @@ app:
     base-url: ${AGENT_BASE_URL:http://localhost:8090}
     service-key: ${AGENT_SERVICE_KEY:change-this-agent-service-key}
     internal-key: ${AGENT_INTERNAL_KEY:change-this-agent-internal-key}
+    internal-identity-secret: ${AGENT_INTERNAL_IDENTITY_SECRET:}
+    internal-identity-required: ${AGENT_INTERNAL_IDENTITY_REQUIRED:false}
+    internal-identity-issuer: ${AGENT_INTERNAL_IDENTITY_ISSUER:docpilot-agent}
+    internal-identity-audience: ${AGENT_INTERNAL_IDENTITY_AUDIENCE:docpilot-server}
+    internal-identity-key-id: ${AGENT_INTERNAL_IDENTITY_KEY_ID:v1}
+    internal-identity-max-ttl-seconds: ${AGENT_INTERNAL_IDENTITY_MAX_TTL_SECONDS:600}
     approval-secret: ${AGENT_APPROVAL_SECRET:${JWT_SECRET:change-this-docpilot-demo-secret-key-at-least-32-bytes}}
     approval-ttl-minutes: ${AGENT_APPROVAL_TTL_MINUTES:15}
     fallback-to-rag: ${AGENT_FALLBACK_TO_RAG:true}

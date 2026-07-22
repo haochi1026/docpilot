@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import httpx
 
 from app.gateway import InternalGateway
@@ -28,6 +30,7 @@ def settings() -> Settings:
         agentops_base_url="http://agentops",
         agentops_api_key="",
         agentops_timeout_seconds=1,
+        docpilot_identity_token_secret="docpilot-identity-secret",
     )
 
 
@@ -35,6 +38,13 @@ def test_search_forwards_identity_and_scope() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["X-Agent-Key"] == "doc-key"
         assert request.headers["X-Username"] == "alice"
+        encoded, signature = request.headers["X-Agent-Identity"].split(".", 1)
+        identity = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        assert identity["sub"] == "alice"
+        assert identity["iss"] == "docpilot-agent"
+        assert identity["aud"] == "docpilot-server"
+        assert identity["jti"]
+        assert signature
         assert request.url.path == "/api/internal/agent/search"
         return httpx.Response(200, json=[{"chunkId": 7, "content": "source"}])
 

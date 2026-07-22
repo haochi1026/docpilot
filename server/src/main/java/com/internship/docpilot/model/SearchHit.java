@@ -3,12 +3,14 @@ package com.internship.docpilot.model;
 public class SearchHit {
   private Long chunkId;
   private Long documentId;
-  private String documentName, content, embedding;
+  private String documentName, heading, content, embedding;
   private Integer pageNo;
   private Integer revisionNo;
   private double score;
   private double lexicalScore;
   private double vectorScore;
+  private double baseScore;
+  private double rerankScore;
   private String retrievalMode;
 
   public SearchHit() {}
@@ -61,6 +63,14 @@ public class SearchHit {
     documentName = v;
   }
 
+  public String getHeading() {
+    return heading;
+  }
+
+  public void setHeading(String value) {
+    heading = value;
+  }
+
   public String getContent() {
     return content;
   }
@@ -107,6 +117,22 @@ public class SearchHit {
 
   public void setVectorScore(double value) {
     vectorScore = value;
+  }
+
+  public double getBaseScore() {
+    return baseScore;
+  }
+
+  public void setBaseScore(double value) {
+    baseScore = value;
+  }
+
+  public double getRerankScore() {
+    return rerankScore;
+  }
+
+  public void setRerankScore(double value) {
+    rerankScore = value;
   }
 
   public String getRetrievalMode() {

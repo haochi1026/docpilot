@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internship.docpilot.repository.DocumentRepository;
 import com.internship.docpilot.repository.VectorStoreRepository;
+import com.internship.docpilot.config.HttpClientFactory;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,8 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -27,7 +30,7 @@ public class EmbeddingService {
   private final DocumentRepository documents;
   private final ModelSettingsService settings;
   private final VectorStoreRepository vectors;
-  private final RestTemplate http = new RestTemplate();
+  private final RestTemplate http;
   private final ObjectMapper mapper = new ObjectMapper();
   private final ReentrantLock rebuildLock = new ReentrantLock();
 
@@ -35,9 +38,20 @@ public class EmbeddingService {
       DocumentRepository documents,
       ModelSettingsService settings,
       VectorStoreRepository vectors) {
+    this(documents, settings, vectors, 2000, 60000);
+  }
+
+  @Autowired
+  public EmbeddingService(
+      DocumentRepository documents,
+      ModelSettingsService settings,
+      VectorStoreRepository vectors,
+      @Value("${app.embedding.connect-timeout-ms:2000}") int connectTimeoutMs,
+      @Value("${app.embedding.read-timeout-ms:60000}") int readTimeoutMs) {
     this.documents = documents;
     this.settings = settings;
     this.vectors = vectors;
+    this.http = HttpClientFactory.bounded(connectTimeoutMs, readTimeoutMs);
   }
 
   public boolean enabled() {

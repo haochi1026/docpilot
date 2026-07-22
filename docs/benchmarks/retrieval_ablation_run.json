@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "kb_id": 1,
+  "dataset": "C:\\Users\\xpro\\Documents\\Codex\\2026-07-12\\da\\outputs\\agent_refactor\\docpilot\\tests\\fixtures\\retrieval_ablation.json",
+  "top_k": 4,
+  "case_count": 12,
+  "strategies": {
+    "LEXICAL": {
+      "positive_cases": 10,
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "negative_cases": 2,
+      "no_answer_accuracy": 1.0,
+      "details": [
+        {
+          "name": "travel-hotel",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.533959
+          ]
+        },
+        {
+          "name": "travel-deadline",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.515897
+          ]
+        },
+        {
+          "name": "travel-materials",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.431247
+          ]
+        },
+        {
+          "name": "policy-version",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.587725
+          ]
+        },
+        {
+          "name": "key-rotation",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.556106
+          ]
+        },
+        {
+          "name": "write-retry-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.479559
+          ]
+        },
+        {
+          "name": "circuit-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.39518
+          ]
+        },
+        {
+          "name": "threshold-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.518724
+          ]
+        },
+        {
+          "name": "approval-binding",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.35168
+          ]
+        },
+        {
+          "name": "document-retry-role",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.573653
+          ]
+        },
+        {
+          "name": "no-answer-mars",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "no-answer-budget",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        }
+      ]
+    },
+    "VECTOR": {
+      "positive_cases": 10,
+      "recall_at_k": 0.0,
+      "mrr": 0.0,
+      "negative_cases": 2,
+      "no_answer_accuracy": 1.0,
+      "details": [
+        {
+          "name": "travel-hotel",
+          "expected_document": "agent-eval-policy.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "travel-deadline",
+          "expected_document": "agent-eval-policy.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "travel-materials",
+          "expected_document": "agent-eval-policy.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "policy-version",
+          "expected_document": "agent-eval-policy.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "key-rotation",
+          "expected_document": "agent-eval-policy.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "write-retry-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "circuit-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "threshold-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "approval-binding",
+          "expected_document": "agent-eval-security.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "document-retry-role",
+          "expected_document": "agent-eval-policy.md",
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "no-answer-mars",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "no-answer-budget",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        }
+      ]
+    },
+    "HYBRID": {
+      "positive_cases": 10,
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "negative_cases": 2,
+      "no_answer_accuracy": 1.0,
+      "details": [
+        {
+          "name": "travel-hotel",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.533959
+          ]
+        },
+        {
+          "name": "travel-deadline",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.515897
+          ]
+        },
+        {
+          "name": "travel-materials",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.431247
+          ]
+        },
+        {
+          "name": "policy-version",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.587725
+          ]
+        },
+        {
+          "name": "key-rotation",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.556106
+          ]
+        },
+        {
+          "name": "write-retry-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.479559
+          ]
+        },
+        {
+          "name": "circuit-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.39518
+          ]
+        },
+        {
+          "name": "threshold-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.518724
+          ]
+        },
+        {
+          "name": "approval-binding",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.35168
+          ]
+        },
+        {
+          "name": "document-retry-role",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.573653
+          ]
+        },
+        {
+          "name": "no-answer-mars",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "no-answer-budget",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        }
+      ]
+    },
+    "HYBRID_RERANK": {
+      "positive_cases": 10,
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "negative_cases": 2,
+      "no_answer_accuracy": 1.0,
+      "details": [
+        {
+          "name": "travel-hotel",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.5325
+          ]
+        },
+        {
+          "name": "travel-deadline",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.497443
+          ]
+        },
+        {
+          "name": "travel-materials",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.422342
+          ]
+        },
+        {
+          "name": "policy-version",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.568294
+          ]
+        },
+        {
+          "name": "key-rotation",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.551142
+          ]
+        },
+        {
+          "name": "write-retry-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.455607
+          ]
+        },
+        {
+          "name": "circuit-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.361974
+          ]
+        },
+        {
+          "name": "threshold-rule",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.477168
+          ]
+        },
+        {
+          "name": "approval-binding",
+          "expected_document": "agent-eval-security.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-security.md"
+          ],
+          "scores": [
+            0.362847
+          ]
+        },
+        {
+          "name": "document-retry-role",
+          "expected_document": "agent-eval-policy.md",
+          "rank": 1,
+          "returned_documents": [
+            "agent-eval-policy.md"
+          ],
+          "scores": [
+            0.540396
+          ]
+        },
+        {
+          "name": "no-answer-mars",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        },
+        {
+          "name": "no-answer-budget",
+          "expected_document": null,
+          "rank": null,
+          "returned_documents": [],
+          "scores": []
+        }
+      ]
+    }
+  }
+}

@@ -3,6 +3,7 @@ package com.internship.docpilot.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internship.docpilot.model.SearchHit;
+import com.internship.docpilot.config.HttpClientFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -19,17 +20,24 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 @Service
 public class OpenAiCompatibleAnswerService implements AiAnswerService {
   private final ModelSettingsService settings;
-  private final RestTemplate http = new RestTemplate();
+  private final RestTemplate http;
   private final ObjectMapper mapper = new ObjectMapper();
 
-  public OpenAiCompatibleAnswerService(ModelSettingsService settings) {
+  @Autowired
+  public OpenAiCompatibleAnswerService(
+      ModelSettingsService settings,
+      @Value("${app.ai.connect-timeout-ms:2000}") int connectTimeoutMs,
+      @Value("${app.ai.read-timeout-ms:180000}") int readTimeoutMs) {
     this.settings = settings;
+    this.http = HttpClientFactory.bounded(connectTimeoutMs, readTimeoutMs);
   }
 
   @Override

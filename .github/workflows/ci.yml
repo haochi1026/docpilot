@@ -92,6 +92,28 @@ jobs:
       - name: Test LangGraph Agent in locked runtime
         run: docker build --target test -t docpilot-agent-test ./agent-service
 
+  system-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the real AgentOps Hub dependency
+        uses: actions/checkout@v4
+        with:
+          repository: haochi1026/agentops-hub
+          path: agentops-hub
+      - name: Start the complete DocPilot and AgentOps topology
+        env:
+          AGENTOPS_CONTEXT: ./agentops-hub
+        run: docker compose -p docpilot-system-e2e -f docker-compose.system-e2e.yml up -d --build --wait --wait-timeout 420
+      - name: Exercise retrieval, trace export, evaluation, EvalOps and HITL resume
+        run: python tests/system_e2e.py
+      - name: Capture service logs on failure
+        if: failure()
+        run: docker compose -p docpilot-system-e2e -f docker-compose.system-e2e.yml logs --no-color --timestamps
+      - name: Tear down the complete topology
+        if: always()
+        run: docker compose -p docpilot-system-e2e -f docker-compose.system-e2e.yml down --volumes --remove-orphans
+
   client:
     runs-on: ubuntu-latest
     steps:

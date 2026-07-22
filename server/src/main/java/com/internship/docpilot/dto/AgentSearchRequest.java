@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 public class AgentSearchRequest {
   @NotNull private Long kbId;
@@ -12,6 +13,9 @@ public class AgentSearchRequest {
   @Min(1)
   @Max(8)
   private int topK = 4;
+
+  @Pattern(regexp = "LEXICAL|VECTOR|HYBRID|HYBRID_RERANK")
+  private String strategy = "HYBRID_RERANK";
 
   public Long getKbId() {
     return kbId;
@@ -35,5 +39,13 @@ public class AgentSearchRequest {
 
   public void setTopK(int topK) {
     this.topK = topK;
+  }
+
+  public String getStrategy() {
+    return strategy;
+  }
+
+  public void setStrategy(String strategy) {
+    this.strategy = strategy;
   }
 }
