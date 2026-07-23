@@ -51,6 +51,9 @@ class DocPilotState(MessagesState):
     recovery_document_names: list[str]
     recovery_index: int
     recovery_results: list[dict[str, Any]]
+    conversation_summary: str
+    context_compacted_messages: int
+    context_estimated_tokens: int
 
 
 class AgentRuntime:
@@ -79,6 +82,7 @@ class AgentRuntime:
             "checkpoint": self.settings.checkpoint_backend,
             "model": self.settings.ollama_model,
             "graph": "explicit-state-graph",
+            "context_memory": "checkpoint-summary-window",
         }
 
     def _build_graph(self, checkpointer: Any) -> Any:
@@ -604,19 +608,57 @@ class AgentRuntime:
         started = time.perf_counter()
         try:
             selected_model = self.model if synthesis_only else self.bound_model
-            response = selected_model.invoke(
-                [SystemMessage(content=prompt), *state.get("messages", [])]
+            model_messages, summary, compacted_messages, estimated_tokens = (
+                _prepare_model_context(
+                    state,
+                    token_budget=self.settings.agent_context_token_budget,
+                    summary_chars=self.settings.agent_context_summary_chars,
+                )
             )
+            if compacted_messages:
+                runtime.stream_writer(
+                    {
+                        "status": (
+                            f"上下文已按 {self.settings.agent_context_token_budget} Token 预算压缩，"
+                            f"持久化摘要覆盖 {compacted_messages} 条历史消息"
+                        )
+                    }
+                )
+            invocation_messages: list[BaseMessage] = [SystemMessage(content=prompt)]
+            if summary:
+                invocation_messages.append(
+                    SystemMessage(
+                        content=(
+                            "以下是从本线程较早轮次提取的持久化会话摘要；它只用于保持上下文，"
+                            "不能替代本轮知识库检索证据：\n" + summary
+                        )
+                    )
+                )
+            invocation_messages.extend(model_messages)
+            response = selected_model.invoke(invocation_messages)
             self.trace_client.span(
                 name="docpilot_model",
                 kind="MODEL",
                 status="SUCCESS",
                 duration_ms=int((time.perf_counter() - started) * 1000),
-                input_data={"route": state.get("route"), "message_count": len(state.get("messages", []))},
+                input_data={
+                    "route": state.get("route"),
+                    "message_count": len(state.get("messages", [])),
+                    "context_selected_messages": len(model_messages),
+                    "context_compacted_messages": compacted_messages,
+                    "context_estimated_tokens": estimated_tokens,
+                    "context_token_budget": self.settings.agent_context_token_budget,
+                },
                 output_data={"tool_calls": [call.get("name") for call in getattr(response, "tool_calls", [])]},
                 usage=_model_usage(response),
             )
-            return {"messages": [response], "model_calls": calls + 1}
+            return {
+                "messages": [response],
+                "model_calls": calls + 1,
+                "conversation_summary": summary,
+                "context_compacted_messages": compacted_messages,
+                "context_estimated_tokens": estimated_tokens,
+            }
         except Exception as exc:
             self.trace_client.span(
                 name="docpilot_model",
@@ -978,8 +1020,9 @@ class AgentRuntime:
                 "role": request.role,
                 "checkpoint_backend": self.settings.checkpoint_backend,
                 "model": self.settings.ollama_model,
-                "prompt_version": "docpilot-agent-v3-evidence-planner",
+                "prompt_version": "docpilot-agent-v4-context-memory",
                 "graph": "explicit-state-graph",
+                "context_token_budget": self.settings.agent_context_token_budget,
             },
         )
         trace_execution_context = contextvars.copy_context()
@@ -1040,6 +1083,16 @@ class AgentRuntime:
                         "model_calls": 0,
                         "tool_calls": 0,
                         "evidence_items": [],
+                        "conversation_summary": str(
+                            existing.values.get("conversation_summary", "")
+                            if existing.values
+                            else ""
+                        ),
+                        "context_compacted_messages": int(
+                            existing.values.get("context_compacted_messages", 0)
+                            if existing.values
+                            else 0
+                        ),
                     }
                     yield self._event("status", "Agent 正在分析任务")
 
@@ -1522,6 +1575,124 @@ def _iterate_in_context(
             yield execution_context.run(next, iterator)
         except StopIteration:
             return
+
+
+def _prepare_model_context(
+    state: Any, *, token_budget: int, summary_chars: int
+) -> tuple[list[BaseMessage], str, int, int]:
+    """Build a bounded model window while keeping full history in checkpoints.
+
+    The checkpoint remains the audit source of truth. Older complete turns are
+    compacted into a deterministic summary, while the newest complete turns
+    (including tool-call/tool-result pairs) are kept verbatim for the model.
+    """
+    messages = list(state.get("messages", []) if isinstance(state, dict) else [])
+    previous_summary = str(
+        state.get("conversation_summary", "") if isinstance(state, dict) else ""
+    ).strip()
+    previous_compacted = int(
+        state.get("context_compacted_messages", 0)
+        if isinstance(state, dict)
+        else 0
+    )
+    if previous_compacted < 0 or previous_compacted > len(messages):
+        previous_compacted = 0
+        previous_summary = ""
+
+    active = messages[previous_compacted:]
+    blocks = _conversation_blocks(active)
+    selected_blocks: list[list[BaseMessage]] = []
+    selected_tokens = 0
+    for block in reversed(blocks):
+        block_tokens = sum(_estimate_message_tokens(message) for message in block)
+        if selected_blocks and selected_tokens + block_tokens > token_budget:
+            break
+        selected_blocks.append(block)
+        selected_tokens += block_tokens
+    selected_blocks.reverse()
+    selected = [message for block in selected_blocks for message in block]
+    evicted_count = max(0, len(active) - len(selected))
+    newly_evicted = active[:evicted_count]
+    summary = _merge_context_summary(previous_summary, newly_evicted, summary_chars)
+    compacted_messages = previous_compacted + evicted_count
+    summary_tokens = _estimate_text_tokens(summary) if summary else 0
+    return selected, summary, compacted_messages, selected_tokens + summary_tokens
+
+
+def _conversation_blocks(messages: list[BaseMessage]) -> list[list[BaseMessage]]:
+    blocks: list[list[BaseMessage]] = []
+    current: list[BaseMessage] = []
+    for message in messages:
+        if _is_user_message(message) and current:
+            blocks.append(current)
+            current = [message]
+        else:
+            current.append(message)
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def _is_user_message(message: Any) -> bool:
+    if isinstance(message, dict):
+        return str(message.get("role", "")).lower() in {"user", "human"}
+    return str(getattr(message, "type", "")).lower() in {"user", "human"}
+
+
+def _estimate_message_tokens(message: Any) -> int:
+    return 4 + _estimate_text_tokens(_message_text(message))
+
+
+def _estimate_text_tokens(value: str) -> int:
+    # Conservative local estimate: CJK characters are close to one token;
+    # non-CJK text is approximated at four characters per token.
+    cjk = len(re.findall(r"[\u3400-\u9fff]", value))
+    non_cjk = len(re.sub(r"[\u3400-\u9fff\s]", "", value))
+    return max(1, cjk + (non_cjk + 3) // 4) if value else 0
+
+
+def _merge_context_summary(
+    previous: str, newly_evicted: list[BaseMessage], max_chars: int
+) -> str:
+    lines = [line.strip() for line in previous.splitlines() if line.strip()]
+    for block in _conversation_blocks(newly_evicted):
+        user_text = next(
+            (_message_text(message) for message in block if _is_user_message(message)),
+            "",
+        )
+        assistant_text = ""
+        tool_names: list[str] = []
+        for message in block:
+            message_type = str(getattr(message, "type", "")).lower()
+            if message_type in {"ai", "assistant"} and _message_text(message).strip():
+                assistant_text = _message_text(message)
+            name = str(getattr(message, "name", "") or "")
+            if message_type == "tool" and name and name not in tool_names:
+                tool_names.append(name)
+        parts: list[str] = []
+        if user_text:
+            parts.append("用户：" + _compact_summary_text(user_text, 120))
+        if assistant_text:
+            parts.append("结果：" + _compact_summary_text(assistant_text, 160))
+        if tool_names:
+            parts.append("工具：" + ", ".join(tool_names[:6]))
+        if parts:
+            lines.append("；".join(parts))
+    while lines and len("\n".join(lines)) > max_chars:
+        lines.pop(0)
+    if not lines:
+        return ""
+    return "\n".join(lines)[-max_chars:]
+
+
+def _compact_summary_text(value: str, limit: int) -> str:
+    compact = re.sub(r"\s+", " ", value).strip()
+    compact = re.sub(
+        r"(?i)(authorization|api[_-]?key|secret|token|password)\s*[:=]\s*\S+",
+        r"\1=***",
+        compact,
+    )
+    return compact if len(compact) <= limit else compact[: limit - 1] + "…"
 
 
 def _extract_evidence_bound_answer(

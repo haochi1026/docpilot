@@ -5,7 +5,7 @@ import base64
 import json
 import time
 import httpx
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 
 from app.agent_runtime import (
@@ -14,6 +14,7 @@ from app.agent_runtime import (
     _decompose_retrieval_queries,
     _extract_evidence_bound_answer,
     _iterate_in_context,
+    _prepare_model_context,
     _resume_command,
     _tool_trace,
 )
@@ -60,6 +61,64 @@ def test_query_planner_is_bounded_and_does_not_invent_terms() -> None:
     queries = _decompose_retrieval_queries("分别查询差旅时限以及所需材料；再查询版本号")
     assert 1 <= len(queries) <= 3
     assert all(term in "分别查询差旅时限以及所需材料；再查询版本号" for term in queries)
+
+
+def test_context_window_compacts_old_complete_turns_and_keeps_recent_tool_pair() -> None:
+    messages = [
+        HumanMessage(content="第一轮：请查询旧制度的报销规则"),
+        AIMessage(content="旧制度要求先审批。"),
+        HumanMessage(content="第二轮：请继续查询交通标准"),
+        AIMessage(content="", tool_calls=[
+            {
+                "name": "search_knowledge_base",
+                "args": {"query": "交通标准", "top_k": 4},
+                "id": "call-current",
+                "type": "tool_call",
+            }
+        ]),
+        ToolMessage(
+            content='{"sources": [{"content": "高铁二等座"}]}',
+            tool_call_id="call-current",
+            name="search_knowledge_base",
+        ),
+        AIMessage(content="交通标准为高铁二等座[1]。"),
+    ]
+    selected, summary, compacted, estimated = _prepare_model_context(
+        {"messages": messages}, token_budget=45, summary_chars=500
+    )
+    assert compacted == 2
+    assert "第一轮" in summary
+    assert selected[0].content.startswith("第二轮")
+    assert any(isinstance(message, ToolMessage) for message in selected)
+    assert estimated > 0
+
+
+def test_context_summary_is_incremental_and_does_not_repeat_compacted_messages() -> None:
+    messages = [
+        HumanMessage(content="第一轮问题"),
+        AIMessage(content="第一轮结果"),
+        HumanMessage(content="第二轮问题"),
+        AIMessage(content="第二轮结果"),
+        HumanMessage(content="第三轮问题"),
+        AIMessage(content="第三轮结果"),
+    ]
+    selected, summary, compacted, _ = _prepare_model_context(
+        {"messages": messages}, token_budget=15, summary_chars=500
+    )
+    selected_again, summary_again, compacted_again, _ = _prepare_model_context(
+        {
+            "messages": messages,
+            "conversation_summary": summary,
+            "context_compacted_messages": compacted,
+        },
+        token_budget=15,
+        summary_chars=500,
+    )
+    assert compacted_again == compacted
+    assert summary_again == summary
+    assert [message.content for message in selected_again] == [
+        message.content for message in selected
+    ]
 
 
 def test_extractive_answer_joins_adjacent_table_lines_and_prefers_code() -> None:

@@ -47,6 +47,8 @@ class Settings:
     agentops_base_url: str
     agentops_api_key: str
     agentops_timeout_seconds: float
+    agent_context_token_budget: int = 6000
+    agent_context_summary_chars: int = 1600
     checkpoint_retention_days: int = 30
     checkpoint_cleanup_interval_seconds: int = 21600
     agentops_governance_enabled: bool = False
@@ -171,6 +173,12 @@ class Settings:
             ),
             docpilot_identity_key_id=os.getenv("DOCPILOT_IDENTITY_KEY_ID", "v1"),
             agentops_timeout_seconds=_float("AGENTOPS_TIMEOUT_SECONDS", 2, 0.1),
+            agent_context_token_budget=_int(
+                "AGENT_CONTEXT_TOKEN_BUDGET", 6000, 512
+            ),
+            agent_context_summary_chars=_int(
+                "AGENT_CONTEXT_SUMMARY_CHARS", 1600, 256
+            ),
             checkpoint_retention_days=_int("CHECKPOINT_RETENTION_DAYS", 30, 1),
             checkpoint_cleanup_interval_seconds=_int("CHECKPOINT_CLEANUP_INTERVAL_SECONDS", 21600, 300),
             agentops_governance_enabled=_bool("AGENTOPS_GOVERNANCE_ENABLED", False),

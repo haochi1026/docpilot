@@ -6,6 +6,7 @@ This FastAPI service adds a LangChain/LangGraph orchestration layer while keepin
 
 - LangChain supplies ChatOllama messages and tools; an explicit LangGraph state graph has a required-retrieval branch and a deterministic document-operations branch. The latter supports a persisted multi-document recovery plan and enforces list → diagnose → state check → one-document write plan → HITL → verify → next item → summary. Every item receives an independent approval, and a rejected/failed item is recorded without losing prior progress.
 - LangGraph checkpoints persist state by `thread_id`: SQLite is available for local development; PostgreSQL is required in production mode.
+- Checkpoints keep the complete conversation for audit and resume. Before each model call, a bounded context window keeps recent complete turns (default estimated budget `AGENT_CONTEXT_TOKEN_BUDGET=6000`); evicted turns are incrementally compacted into a secret-redacted summary stored in graph state. The summary is continuity memory, never a replacement for fresh retrieval evidence. The estimator is intentionally lightweight and should be calibrated to the deployed model tokenizer when strict token accounting is required.
 - `ModelCallLimitMiddleware` and `ToolCallLimitMiddleware` cap a single run and prevent unbounded loops.
 - `policy_gate` interrupts `retry_document_parsing` before the Java write API is called. The Java service persists the approval record and issues a one-time HMAC-bound token after the user approves.
 - A trusted `ToolRuntime` context carries username, user ID, role, knowledge-base ID and thread ID. These fields are not model-controlled tool arguments.
@@ -69,7 +70,7 @@ Run Python tests from this directory:
 
 ```powershell
 python -m pip install -r requirements-dev.lock
-pytest
+  pytest -q --cov=app --cov-report=term-missing
 ```
 
-The Agent is self-contained within DocPilot and does not depend on another business system. Test the document recovery flow with a document whose parse status is `FAILED`.
+The current local regression includes 35 Python tests with 76% application coverage. The Agent is self-contained within DocPilot and does not depend on another business system. Test the document recovery flow with a document whose parse status is `FAILED`.

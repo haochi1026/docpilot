@@ -1,6 +1,6 @@
 # 学习阶段前的可复现基线
 
-更新时间：2026-07-22（Asia/Shanghai）
+更新时间：2026-07-23（Asia/Shanghai）
 
 这份基线用于把“已经验证的能力”和“生产环境仍需补充的能力”分开，避免把本地回归结果误写成生产 SLO。
 
@@ -12,6 +12,7 @@
 | AgentOps 回归集 | 160/160 | `agentops/scripts/seed_full_regression.py` |
 | Java 单元测试 | PASS | `mvn -B -ntp verify` |
 | Agent/AgentOps 单元测试 | PASS | 两个 Python 项目执行 `pytest` |
+| 本次 Agent 上下文记忆回归 | PASS | DocPilot 35 tests，应用覆盖率约 76%；覆盖旧轮次压缩、摘要增量更新和工具调用轮次保留 |
 | 本地词法/混合检索 | PASS | `scripts/retrieval_ablation.py` |
 
 系统 E2E 是稳定回归环境，明确使用 `QUEUE_MODE=local`、`VECTOR_STORE_ENABLED=false`、`OCR_ENABLED=false`。因此它不代表 RocketMQ、pgvector 和 OCR 已通过真实依赖验收。
